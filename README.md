@@ -85,52 +85,87 @@ First start the daemon (ratools/rad)
 Now use the CLI (ratools/ractl) to create a new RA
 
     $ ractl ra@dummy0 create
+    $ ractl ra@dummy0 enable
 
+How about advertising the link MTU?
+
+    $ mtu@dummy0 create
+    $ mtu@dummy0 enable
+
+It is also nice to let clients know the link-local address.
+
+    $ sll@dummy0 create
+    $ sll@dummy0 enable
+
+Of course we like to advertise at least one prefix!
+
+    $ pi0@dummy0 create
+    $ pi0@dummy0 set prefix 2001:db8::/64
+    $ pi0@dummy0 enable
+
+Nice routers come with recursive DNS server addresses as well:
+
+    $ rdnss0@dummy0 create
+    $ rdnss0@dummy0 add server 2001:db8::53
+    $ rdnss0@dummy0 enable
 
 Have at look at your ICMPv6 masterpiece using the CLI
 
     $ ractl show
-    Router Advertisement `ra@dummy0':
-      State:                  Fading in   (34%)
-      Created:                2014-05-20 18:30:45
-      Updated:                2014-05-20 18:30:45
-      Version:                7/12            (Compilation scheduled)
-      Interface ID:           4               (dummy0)
-      Interface State:        1               (Up)
-      Interface MTU:          1500
-      Hardware Address:       be:67:97:6b:0b:c7
-      Link-local Address:     fe80::bc67:97ff:fe6b:bc7
-      Forwarding:             1               (Enabled)
-      Maximum Interval:       600             (0d 0h 10m 0s)
-      Minimum Interval:       198             (0d 0h 3m 18s)
-      Solicited/Unsolicited:  1/0
-      Unicast/Multicast:      0/1
-      Total RAs:              1               (16 Bytes)
-      Next RA scheduled:      2014-05-20 18:31:01
-      Current Hop Limit:      64
-      Managed Flag:           0               (No Managed Address Configuration)
-      Other Managed Flag:     0               (No Other Managed Configuration)
-      Home Agent Flag:        0               (No Mobile IPv6 Home Agent)
-      Router Preference:      00              (Medium)
-      NDP Proxy Flag:         0               (No NDP Proxy)
-      Lifetime:               1800            (0h 30m 0s)
-      Reachable Time:         0               (0h 0m 0s 0ms)
-      Retransmission Timer:   0               (0h 0m 0s 0ms)
-      Link-MTU Option `mtu@dummy0':
-        State:                Enabled
-        Auto-detection:       On
-        Link-MTU:             1500
-      Source Link-layer Address Option `sll@dummy0':
-        State:                Enabled
-        Auto-detection:       On
-        Hardware Address:     be:67:97:6b:0b:c7
+	Router Advertisement `ra@dummy0':
+	  State:                  Enabled         
+	  Created:                2014-05-22 00:16:32
+	  Updated:                2014-05-22 00:18:19
+	  Version:                11/20           (Compilation scheduled)
+	  Interface ID:           4               (dummy0)
+	  Interface State:        1               (Up)
+	  Interface MTU:          1500            
+	  Hardware Address:       4e:3a:65:ec:78:4f
+	  Link-local Address:     fe80::4c3a:65ff:feec:784f
+	  Forwarding:             1               (Enabled)
+	  Maximum Interval:       600             (0d 0h 10m 0s)
+	  Minimum Interval:       198             (0d 0h 3m 18s)
+	  Solicited/Unsolicited:  3/0             
+	  Unicast/Multicast:      0/3             
+	  Total RAs:              3               (56 Bytes)
+	  Next RA scheduled:      2014-05-22 00:23:27
+	  Current Hop Limit:      64              
+	  Managed Flag:           0               (No Managed Address Configuration)
+	  Other Managed Flag:     0               (No Other Managed Configuration)
+	  Home Agent Flag:        0               (No Mobile IPv6 Home Agent)
+	  Router Preference:      00              (Medium)
+	  NDP Proxy Flag:         0               (No NDP Proxy)
+	  Lifetime:               1800            (0h 30m 0s)
+	  Reachable Time:         0               (0h 0m 0s 0ms)
+	  Retransmission Timer:   0               (0h 0m 0s 0ms)
+	  Link-MTU Option `mtu@dummy0':
+		State:                Enabled         
+		Auto-detection:       On              
+		Link-MTU:             1500            
+	  Source Link-layer Address Option `sll@dummy0':
+		State:                Enabled         
+		Auto-detection:       On              
+		Hardware Address:     4e:3a:65:ec:78:4f
+	  Prefix Information Option `pi0@dummy0':
+		State:                Enabled         
+		On-link Flag:         1               (On-link Prefix)
+		Autonomous Flag:      1               (Autonomous Address Configuration)
+		Router Address Flag:  0               (No Mobile IPv6 Router Address)
+		Valid Time:           2592000         (30d 0h 0m 0s)
+		Preferred Time:       604800          (7d 0h 0m 0s)
+		Prefix:               2001:db8::/64   
+		  Warning: Documentation prefix!
+	  Recursive DNS Server Option `rdnss0@dummy0':
+		State:                Enabled         
+		Lifeime:              900             (0d 0h 15m 0s)
+		Servers:                              
+		  Address:            2001:db8::53    
 
 
 
 Please make sure to use the latest version before reporting bugs. Thanks!
 
     $ ractl version
-    ratools/ractl 0.3.5 (May 2014)
 
 
 Mailing List
