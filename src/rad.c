@@ -44,6 +44,7 @@
 #include <sys/un.h>             /* struct sockaddr_un */
 #include <netinet/icmp6.h>
 #include <sys/stat.h>           /* chmod() */
+#include <getopt.h>
 
 
 /* --- globals -------------------------------------------------------------- */
@@ -587,31 +588,6 @@ static int rat_rad_fill_mi_opt (struct rat_db *db, struct rat_db_opt *opt,
 exit_err:
     return RAT_ERROR;
 }
-
-
-//~ /**
- //~ * @brief Fill the instance variables of a module instance
- //~ *
- //~ * Generic fill function. Will determine whether the instance is of type RA
- //~ * module or an other module.
- //~ *
- //~ * @param db                    database entry
- //~ * @param mi                    instance data buffer
- //~ * @param mid                   module id
- //~ * @param oid                   option index
- //~ *
- //~ * @return Returns RAT_ERROR on error, RAT_OK otherwise
- //~ */
-//~ static int rat_rad_fill_mi(struct rat_db *db, struct rat_mod_instance *mi,
-                           //~ uint16_t mid, uint16_t oid)
-//~ {
-    //~ RAT_DEBUG_TRACE();
-//~
-    //~ if (mid == rat_rad_ra_mid)
-        //~ return rat_rad_fill_mi_ra(db, mi);
-//~
-    //~ return rat_rad_fill_mi_id(db, mid, oid, mi);
-//~ }
 
 
 /* --- compilation and packet set preparation ------------------------------- */
@@ -2209,10 +2185,8 @@ static void rat_rad_ra_join_workers (void)
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
  */
-int main (int argc, const char *argv[])
+int main (int argc, char *argv[])
 {
-    /* logging */
-    char *loglevel;
     /* threads */
     pthread_attr_t attr;
     pthread_t rs_thread;
@@ -2229,27 +2203,51 @@ int main (int argc, const char *argv[])
     struct rat_ctl_request crq;
     int ret;
     RAT_DEBUG_TRACE();
-    RAT_DISCARD_UNUSED(argc);
-    RAT_DISCARD_UNUSED(argv);
 
     /* version information */
     fprintf(stdout, "ratools/rad " RAT_VERSION " (" RAT_DATE ")\n");
 
 
-    /* --- set log level ---------------------------------------------------- */
+    /* --- set defaults and get options ------------------------------------- */
 
 
-    loglevel = getenv("RAT_LOG_LEVEL");
-    if (loglevel && *loglevel) {
-        if (strcmp(loglevel, "error") == 0)
-            rat_log_set_level(RAT_LOG_ERROR);
-        else if (strcmp(loglevel, "warning") == 0)
-            rat_log_set_level(RAT_LOG_WARNING);
-        else if (strcmp(loglevel, "info") == 0)
-            rat_log_set_level(RAT_LOG_INFO);
-        else
-            fprintf(stderr, "Error: Invalid log level `%s'!\n", loglevel);
+    sockaddr = strdup(RAT_SOCKADDR);
+    while (1) {
+        int c, cidx;
+        static struct option copts[] = {
+            {"socket",       required_argument, 0, 's'},
+            {"loglevel",     required_argument, 0, 'l'},
+            {0, 0, 0, 0}
+        };
+        c = getopt_long(argc, argv, "s:l:", copts, &cidx);
+
+        if (c == -1)
+            break;
+        switch (c) {
+            case 's':
+                sockaddr = optarg;
+                break;
+            case 'l':
+                if (strcmp(optarg, "info") == 0) {
+                    rat_log_set_level(RAT_LOG_INFO);
+                } else if (strcmp(optarg, "warning") == 0) {
+                    rat_log_set_level(RAT_LOG_WARNING);
+                } else if (strcmp(optarg, "error") == 0) {
+                    rat_log_set_level(RAT_LOG_ERROR);
+                } else {
+                    fprintf(stderr, "Error: Unknown log level `%s'!\n", optarg);
+                    goto exit_err;
+                }
+                break;
+            case '?':
+                goto exit_err;
+                break;
+            default:
+                break;
+        }
     }
+    argc = argc - optind + 1;
+    argv += optind - 1;
 
 
     /* --- various initializations ------------------------------------------ */
@@ -2276,11 +2274,7 @@ int main (int argc, const char *argv[])
     /* initialize unix domain socket address */
     memset(&srvsa, 0x0, sizeof(srvsa));
     srvsa.sun_family = AF_UNIX;
-    sockaddr = getenv("RAT_SOCKET_ADDRESS");
-    if (sockaddr && *sockaddr)
-        strncpy(srvsa.sun_path, sockaddr, sizeof(srvsa.sun_path) - 1);
-    else
-        strncpy(srvsa.sun_path, RAT_SOCKADDR, sizeof(srvsa.sun_path) - 1);
+    strncpy(srvsa.sun_path, sockaddr, sizeof(srvsa.sun_path) - 1);
 
     /* register modules */
     rat_ra_init();

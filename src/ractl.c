@@ -457,7 +457,7 @@ int main (int argc, char *argv[])
             {"socket",       required_argument, 0, 's'},
             {0, 0, 0, 0}
         };
-        c = getopt_long (argc, argv, "s:", copts, &cidx);
+        c = getopt_long(argc, argv, "s:", copts, &cidx);
 
         if (c == -1)
             break;
