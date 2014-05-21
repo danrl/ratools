@@ -46,7 +46,7 @@ extern int rat_lib_6addr_is_documentation (struct in6_addr *);
 extern int rat_lib_6addr_is_multicast (struct in6_addr *);
 extern int rat_lib_6addr_to_str (char *, size_t, struct in6_addr *);
 extern int rat_lib_6addr_from_str (struct in6_addr *, const char *);
-
+extern int rat_lib_6addr_ok (struct in6_addr *);
 
 /* --- prefixes ------------------------------------------------------------- */
 

@@ -32,6 +32,7 @@
 #include "opt_mtu.h"
 #include "opt_sll.h"
 #include "opt_pi.h"
+#include "opt_rdnss.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -2059,10 +2060,10 @@ static int rat_rad_exec_module (struct rat_ctl_request *crq)
                 rat_rad_fill_mi_opt(db, opt, &mi);
                 if (rat_mod_rad_call_aid(&rat_rad_mf, &mi, crq->crq_mid,
                                          crq->crq_aid) == RAT_OK) {
+                    rat_db_del_opt(db, crq->crq_mid, crq->crq_oid);
                     rat_db_updated(db);
                     goto exit_ok_release;
                 }
-                rat_db_del_opt(db, crq->crq_mid, crq->crq_oid);
                 break;
             case RAT_MOD_AID_ENABLE:
             case RAT_MOD_AID_DISABLE:
@@ -2281,6 +2282,7 @@ int main (int argc, char *argv[])
     rat_opt_mtu_init();
     rat_opt_sll_init();
     rat_opt_pi_init();
+    rat_opt_rdnss_init();
 
     /* find RA core module id in registry */
     if (rat_mod_parse_module(RAT_RAMODNAME, &rat_rad_ra_mid) != RAT_OK) {
