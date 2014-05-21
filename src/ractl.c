@@ -34,7 +34,18 @@
 #include <errno.h>
 #include <unistd.h>             /* read() */
 #include <sys/un.h>             /* struct sockaddr_un */
+#include <getopt.h>
+#include <string.h>
 
+
+/* --- global --------------------------------------------------------------- */
+
+
+/** Socket address for communication with ratools/rad */
+static char *rat_ractl_sockaddr = NULL;
+
+
+/* --- helper functions ----------------------------------------------------- */
 
 
 /**
@@ -81,6 +92,81 @@ exit_err:
 
 
 /**
+ * @brief Normalize a configuration line
+ *
+ * Strips leading, consecutive and trailing white spaces.
+ *
+ * @param line                  configuration line
+ *
+ * @return Returns RAT_ERROR on error, RAT_OK otherwise
+ */
+static int rat_ractl_normalize (char *line)
+{
+    char *s, *p;
+    int ws;
+    RAT_DEBUG_TRACE();
+
+    if (*line == '#')
+            return RAT_ERROR;
+
+    s = p = line;
+    while (*s && *s != '\n') {
+        if (*s == '\t')
+            *s = ' ';
+        if (*s == ' ' && ws) {
+            s++;
+            continue;
+        }
+        ws = (*s == ' ');
+        *p++ = *s++;
+    }
+    *p = 0x0;
+
+    return RAT_OK;
+}
+
+
+/**
+ * @brief Tokenize a configuration line
+ *
+ * Converts a normalized configuration line into an array of strings.
+ *
+ * @param line                  configuration line
+ * @param tok                   array of strings
+ * @param toklen                number of array elements
+ *
+ * @return Returns the number of found tokens
+ */
+static unsigned int rat_ractl_tokenize (char *line, char *tok[], size_t toklen)
+{
+    char *s = line;
+    unsigned int i;
+    RAT_DEBUG_TRACE();
+
+    if (!*line)
+        return 0;
+
+    for (i = 0; i < toklen; i++)
+        tok[i] = NULL;
+    i = 0;
+
+    tok[i++] = s;
+    while (*++s && i < toklen) {
+        if (*s == ' ') {
+            *s = 0x0;
+            if (*++s)
+                tok[i++] = s;
+        }
+    }
+
+    return i;
+}
+
+
+/* --- parser --------------------------------------------------------------- */
+
+
+/**
  * @brief Parse and send a configuration line
  *
  * Configuration line is parsed and converted into a request control message.
@@ -97,7 +183,6 @@ static int rat_ractl_parse_send (int argc, char *argv[])
     regmatch_t rm[4];
     char rbuf[MAX(RAT_MODNAMELEN, RAT_INDEXSTRLEN) + 1];
     struct rat_ctl_request crq;
-    char *sockaddr;
     struct sockaddr_un sa;
     int sd;
     struct rat_ctl_reply cry;
@@ -290,11 +375,7 @@ send_request:
     /* initialize unix domain socket address */
     memset(&sa, 0x0, sizeof(sa));
     sa.sun_family = AF_UNIX;
-    sockaddr = getenv("RAT_SOCKET_ADDRESS");
-    if (sockaddr)
-        strncpy(sa.sun_path, sockaddr, sizeof(sa.sun_path) - 1);
-    else
-        strncpy(sa.sun_path, RAT_SOCKADDR, sizeof(sa.sun_path) - 1);
+    strncpy(sa.sun_path, rat_ractl_sockaddr, sizeof(sa.sun_path) - 1);
 
     /* open unix domain socket */
     if ((sd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
@@ -350,76 +431,7 @@ exit_err:
 }
 
 
-/**
- * @brief Normalize a configuration line
- *
- * Strips leading, consecutive and trailing white spaces.
- *
- * @param line                  configuration line
- *
- * @return Returns RAT_ERROR on error, RAT_OK otherwise
- */
-static int rat_ractl_normalize (char *line)
-{
-    char *s, *p;
-    int ws;
-    RAT_DEBUG_TRACE();
-
-    if (*line == '#')
-            return RAT_ERROR;
-
-    s = p = line;
-    while (*s && *s != '\n') {
-        if (*s == '\t')
-            *s = ' ';
-        if (*s == ' ' && ws) {
-            s++;
-            continue;
-        }
-        ws = (*s == ' ');
-        *p++ = *s++;
-    }
-    *p = 0x0;
-
-    return RAT_OK;
-}
-
-
-/**
- * @brief Tokenize a configuration line
- *
- * Converts a normalized configuration line into an array of strings.
- *
- * @param line                  configuration line
- * @param tok                   array of strings
- * @param toklen                number of array elements
- *
- * @return Returns the number of found tokens
- */
-static unsigned int rat_ractl_tokenize (char *line, char *tok[], size_t toklen)
-{
-    char *s = line;
-    unsigned int i;
-    RAT_DEBUG_TRACE();
-
-    if (!*line)
-        return 0;
-
-    for (i = 0; i < toklen; i++)
-        tok[i] = NULL;
-    i = 0;
-
-    tok[i++] = s;
-    while (*++s && i < toklen) {
-        if (*s == ' ') {
-            *s = 0x0;
-            if (*++s)
-                tok[i++] = s;
-        }
-    }
-
-    return i;
-}
+/* --- main ----------------------------------------------------------------- */
 
 
 /**
@@ -435,7 +447,34 @@ int main (int argc, char *argv[])
     char buffer[256];
     char *stdinv[RAT_RACTL_MAXTOKENS];
     unsigned int stdinc;
-    int ret = RAT_OK;
+    int ret = EXIT_SUCCESS;
+
+    /* set defaults and get options */
+    rat_ractl_sockaddr = strdup(RAT_SOCKADDR);
+    while (1) {
+        int c, cidx;
+        static struct option copts[] = {
+            {"socket",       required_argument, 0, 's'},
+            {0, 0, 0, 0}
+        };
+        c = getopt_long (argc, argv, "s:", copts, &cidx);
+
+        if (c == -1)
+            break;
+        switch (c) {
+            case 's':
+                rat_ractl_sockaddr = optarg;
+                break;
+            case '?':
+                ret = EXIT_FAILURE;
+                goto exit;
+                break;
+            default:
+                break;
+        }
+    }
+    argc = argc - optind + 1;
+    argv += optind - 1;
 
     /* initialize modules */
     rat_ra_init();
@@ -449,10 +488,10 @@ int main (int argc, char *argv[])
             fprintf(stderr, "Error: Missing action or object!\n");
             fprintf(stderr, "Try `version', `log', `show' or `dump'.\n");
             rat_mod_help_modules();
-            ret = RAT_ERROR;
+            ret = EXIT_FAILURE;
         } else {
             if (rat_ractl_parse_send(--argc, ++argv) != RAT_OK)
-                ret = RAT_ERROR;
+                ret = EXIT_FAILURE;
         }
     } else {
         /* stdin */
@@ -466,12 +505,10 @@ int main (int argc, char *argv[])
                 continue;
 
             if (rat_ractl_parse_send(stdinc, stdinv) != RAT_OK)
-                ret = RAT_ERROR;
+                ret = EXIT_FAILURE;
         }
     }
 
-    if (ret == RAT_OK)
-        return EXIT_SUCCESS;
-
-    return EXIT_FAILURE;
+exit:
+    return ret;
 }
