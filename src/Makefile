@@ -26,6 +26,7 @@ ractl: \
 	opt_mtu.o       \
 	opt_sll.o       \
 	opt_pi.o        \
+	opt_rdnss.o     \
 	ractl.o
 	[ -d "$(DESTDIR)" ] || mkdir ../bin/
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(DESTDIR)$@ $^
@@ -43,6 +44,7 @@ rad: \
 	opt_mtu.o       \
 	opt_sll.o       \
 	opt_pi.o        \
+	opt_rdnss.o     \
 	rad.o
 	[ -d "$(DESTDIR)" ] || mkdir ../bin/
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(DESTDIR)$@ $^

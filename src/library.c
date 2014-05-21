@@ -326,6 +326,27 @@ exit_err:
 }
 
 
+/**
+ * @brief Check ipv6 address string
+ *
+ * @param addr                  address
+ *
+ * @return Returns RAT_ERROR on error, RAT_OK otherwise
+ */
+int rat_lib_6addr_ok (struct in6_addr *addr)
+{
+    char buf[INET6_ADDRSTRLEN];
+    if (!addr)
+        goto exit_err;
+
+    if (inet_pton(AF_INET6, buf, addr) == 0)
+        return 1;
+
+exit_err:
+    return 0;
+}
+
+
 /* --- prefixes ------------------------------------------------------------- */
 
 
