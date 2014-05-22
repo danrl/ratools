@@ -19,6 +19,7 @@
 
 #include "opt_sll.h"
 
+#include "library.h"
 #include "log.h"
 #include "module.h"
 

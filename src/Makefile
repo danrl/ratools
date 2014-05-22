@@ -57,6 +57,7 @@ racomplete-ractl: \
 	opt_mtu.o       \
 	opt_sll.o       \
 	opt_pi.o        \
+	opt_rdnss.o     \
 	racomplete-ractl.o
 	[ -d "$(DESTDIR)" ] || mkdir ../bin/
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(DESTDIR)$@ $^
