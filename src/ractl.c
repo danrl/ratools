@@ -488,7 +488,7 @@ int main (int argc, char *argv[])
         /* tty */
         if (argc < 2) {
             fprintf(stderr, "Error: Missing action or object!\n");
-            fprintf(stderr, "Try `version', `log', `show' or `dump'.\n");
+            fprintf(stderr, "Try `version', `loglevel', `show' or `dump'.\n");
             rat_mod_help_modules();
             ret = EXIT_FAILURE;
         } else {
