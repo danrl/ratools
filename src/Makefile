@@ -7,13 +7,14 @@ CDEFS       += -DLEVEL1_DCACHE_LINESIZE=`getconf LEVEL1_DCACHE_LINESIZE`
 # tracing is slow and spams the logs. use with care!
 #CDEFS       += -DRAT_DEBUG_TRACING
 LDFLAGS     +=
-DESTDIR      = ../bin/
+BINDIR       = ../bin
+BASHDIR      = ../bash-completion.d
 
 # generic build instructions
 .PHONY:     all clean
 .DEFAULT:   all
 
-all: 		ractl rad
+all: 		rad ractl racomplete-ractl bash-completion
 
 %.o:	%.c %.h ratools.h
 	$(CC) $(CFLAGS) $(CDEFS) -c $<
@@ -28,8 +29,8 @@ ractl: \
 	opt_pi.o        \
 	opt_rdnss.o     \
 	ractl.o
-	[ -d "$(DESTDIR)" ] || mkdir ../bin/
-	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(DESTDIR)$@ $^
+	[ -d "$(BINDIR)" ] || mkdir "$(BINDIR)"
+	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 rad: \
 	library.o       \
@@ -46,8 +47,8 @@ rad: \
 	opt_pi.o        \
 	opt_rdnss.o     \
 	rad.o
-	[ -d "$(DESTDIR)" ] || mkdir ../bin/
-	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(DESTDIR)$@ $^
+	[ -d "$(BINDIR)" ] || mkdir "$(BINDIR)"
+	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 racomplete-ractl: \
 	library.o       \
@@ -57,12 +58,20 @@ racomplete-ractl: \
 	opt_mtu.o       \
 	opt_sll.o       \
 	opt_pi.o        \
+	opt_rdnss.o     \
 	racomplete-ractl.o
-	[ -d "$(DESTDIR)" ] || mkdir ../bin/
-	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(DESTDIR)$@ $^
+	[ -d "$(BINDIR)" ] || mkdir "$(BINDIR)"
+	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
+
+bash-completion: \
+	$(BINDIR)/racomplete-ractl
+	[ -d "$(BASHDIR)" ] || mkdir "$(BASHDIR)"
+	$(BINDIR)/racomplete-ractl > $(BASHDIR)/ractl.sh
+
 
 clean:
 	rm -f     *.o
-	rm -f     ../bin/*
+	rm -rf    "$(BINDIR)"
+	rm -rf    "$(BASHDIR)"
 
 

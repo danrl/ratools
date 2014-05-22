@@ -822,6 +822,19 @@ exit_err:
 }
 
 
+/**
+ * @brief Leak module registry
+ *
+ * This is a special purpose function and must never be called by a module!
+ *
+ * @return Returns pointer to first module in registry
+ */
+extern struct rat_mod_modreg *rat_mod_leak_registry (void)
+{
+    return rat_mod_registry;
+}
+
+
 /* --- cli help functions --------------------------------------------------- */
 
 
@@ -851,7 +864,7 @@ int rat_mod_help_modules (void)
             fprintf(stderr, " or ");
         else if (i > 0)
             fprintf(stderr, ", ");
-        fprintf(stderr, "`%s%s@enp0s25'", mmr->mmr_name,
+        fprintf(stderr, "`%s%s@eth0'", mmr->mmr_name,
                 mmr->mmr_multiple ? "0" : "");
         i++;
     }

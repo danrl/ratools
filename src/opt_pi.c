@@ -20,6 +20,7 @@
 
 #include "opt_pi.h"
 
+#include "library.h"
 #include "log.h"
 #include "module.h"
 

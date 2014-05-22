@@ -196,8 +196,8 @@ static int rat_ractl_parse_send (int argc, char *argv[])
      * argv:    [0]             [1]         [2]             [3]
      * argc:    1               2           3               4
      * ----------------------------------------------------------
-     * example: ra@enp0s25      create
-     * example: ra@enp0s25      set         lifetime        30m
+     * example: ra@eth0         create
+     * example: ra@eth0         set         lifetime        30m
      * example: dump
      */
 
@@ -247,7 +247,7 @@ static int rat_ractl_parse_send (int argc, char *argv[])
     }
 
 
-    /* --- parse object, e.g. ra@enp0s25 ------------------------------------ */
+    /* --- parse object, e.g. ra@eth0 --------------------------------------- */
 
 
     crq.crq_type = RAT_CTL_REQUEST_TYPE_MODULE;
