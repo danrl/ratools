@@ -1,0 +1,13 @@
+# Be more verbose
+log info
+# Router Advertisement `ra@dummy0'
+ra@dummy0 create
+ra@dummy0 enable
+# Link MTU Option `mtu@dummy0'
+mtu@dummy0 create
+mtu@dummy0 enable
+# Recursive DNS Server Option `rdnss3@dummy0':
+rdnss3@dummy0 create
+rdnss3@dummy0 add server 2001:db::538
+rdnss3@dummy0 add server 2001:db::777
+rdnss3@dummy0 enable

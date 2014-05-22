@@ -133,12 +133,14 @@ Please make sure to use the latest version before reporting bugs. Thanks!
     ratools/ractl 0.3.5 (May 2014)
 
 
-Mailing List
-------------
+Resources
+---------
 
-* Subscribe http://www.freelists.org/list/ratools
+* Mailing List http://www.freelists.org/list/ratools
 
-* Archive http://www.freelists.org/archive/ratools/
+* Mailing List Archive http://www.freelists.org/archive/ratools/
+
+* Repository https://github.com/danrl/ratools
 
 
 License
