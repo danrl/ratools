@@ -20,6 +20,7 @@
 
 #include "opt_mtu.h"
 
+#include "library.h"
 #include "log.h"
 #include "module.h"
 

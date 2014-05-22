@@ -147,8 +147,8 @@ struct in6_pktinfo {
  * @brief Maximum length of index string
  *
  * An index is a number to identify a instance of a module. E.g. in
- * `pi3[AT]enp0s25' the `3' is the index number of the third instance of module
- * `pi' at interface `enp0s25'. It has a length of `1' (not including the
+ * `pi3[AT]eth0' the `3' is the index number of the third instance of module
+ * `pi' at interface `eth0'. It has a length of `1' (not including the
  * terminating \0). The maximum index number is currently limited because the
  * highest value a string of `4' characters can describe is `9999'.
  *

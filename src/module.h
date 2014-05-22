@@ -316,6 +316,7 @@ extern int rat_mod_register (struct rat_mod_modreg *);
 extern int rat_mod_requires_oid (uint16_t);
 extern int rat_mod_requires_pid (uint16_t, uint16_t);
 extern int rat_mod_requires_vid (uint16_t, uint16_t, uint16_t);
+extern struct rat_mod_modreg *rat_mod_leak_registry (void);
 
 extern char *rat_mod_get_name (uint16_t);
 
@@ -334,8 +335,6 @@ extern int rat_mod_help_modules (void);
 extern int rat_mod_help_actions (uint16_t);
 extern int rat_mod_help_parameters (uint16_t, uint16_t);
 extern int rat_mod_help_values (uint16_t, uint16_t, uint16_t);
-
-extern void rat_mod_list_modules (void);
 
 
 /* --- function caller ------------------------------------------------------ */
