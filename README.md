@@ -161,10 +161,25 @@ Have at look at your ICMPv6 masterpiece using the CLI
           Address:            2001:db8::53
 
 
+To save your work you can dump the configuration:
 
-Please make sure to use the latest version before reporting bugs. Thanks!
+    $ ractl dump
+
+
+Please make sure to always use the latest version before reporting bugs. Thanks!
 
     $ ractl version
+    ra@dummy0 create
+    mtu@dummy0 create
+    mtu@dummy0 enable
+    sll@dummy0 create
+    sll@dummy0 enable
+    pi0@dummy0 create
+    pi0@dummy0 set prefix 2001:db8::/64
+    pi0@dummy0 enable
+    rdnss0@dummy0 create
+    rdnss0@dummy0 add server 2001:db8::53
+    rdnss0@dummy0 enable
 
 
 Resources
