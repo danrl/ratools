@@ -71,6 +71,32 @@ extern int rat_lib_bytes_to_str (char *, size_t, uint64_t);
 /* --- time ----------------------------------------------------------------- */
 
 
+/** Convert seconds to hour, minute and second */
+/** @{ */
+#define RAT_LIB_S_H_TO_H(x)     ((x) / (60 * 60))
+#define RAT_LIB_S_H_TO_M(x)     (((x) % (60 * 60)) / 60)
+#define RAT_LIB_S_H_TO_S(x)     ((x) % 60)
+/** @} */
+
+
+/** Convert seconds to day, hour, minute and second */
+/** @{ */
+#define RAT_LIB_S_D_TO_D(x)     ((x) / (60 * 60 * 24))
+#define RAT_LIB_S_D_TO_H(x)     (((x) % (60 * 60 * 24)) / (60 * 60))
+#define RAT_LIB_S_D_TO_M(x)     (((x) % (60 * 60)) / 60)
+#define RAT_LIB_S_D_TO_S(x)     ((x) % 60)
+/** @} */
+
+
+/** Convert milliseconds to hour, minute, second and millisecond */
+/** @{ */
+#define RAT_LIB_MS_H_TO_H(x)    ((x) / (1000 * 60 * 60))
+#define RAT_LIB_MS_H_TO_M(x)    (((x) / (1000 * 60)) % 60)
+#define RAT_LIB_MS_H_TO_S(x)    (((x) % (1000 * 60)) / 1000)
+#define RAT_LIB_MS_H_TO_MS(x)   ((x) % 1000)
+/** @} */
+
+
 extern int rat_lib_time_to_str (char * const, const size_t, time_t *);
 
 

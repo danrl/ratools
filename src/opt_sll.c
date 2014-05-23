@@ -134,17 +134,18 @@ static int rat_opt_sll_show (struct rat_mod_functions *mf,
     char buffer[RAT_HWADDR_STRSIZ];
     RAT_DEBUG_TRACE();
 
-    mf->mf_title(1, "Source Link-layer Address Option `%s':", mi->mi_myname);
+    mf->mf_title(mi->mi_in, "Source Link-layer Address Option `%s':",
+                 mi->mi_myname);
 
-    mf->mf_param(1, "State");
+    mf->mf_param(mi->mi_in, "State");
     mf->mf_value("%s", sll->sll_enabled ? "Enabled" : "Disabled");
     mf->mf_info(NULL);
 
-    mf->mf_param(1, "Auto-detection");
+    mf->mf_param(mi->mi_in, "Auto-detection");
     mf->mf_value("%s", sll->sll_autodetect ? "On" : "Off");
     mf->mf_info(NULL);
 
-    mf->mf_param(1, "Hardware Address");
+    mf->mf_param(mi->mi_in, "Hardware Address");
     if (sll->sll_autodetect) {
         rat_lib_hwaddr_to_str(buffer, sizeof(buffer), &mi->mi_hwaddr);
         mf->mf_value("%s", buffer);
@@ -154,7 +155,8 @@ static int rat_opt_sll_show (struct rat_mod_functions *mf,
         mf->mf_value("%s", buffer);
         mf->mf_info(NULL);
         if (RAT_OPT_SLL_UNCOMMON(&sll->sll_hwaddr))
-            mf->mf_comment(1, "Advertising an uncommon hardware address!");
+            mf->mf_comment(mi->mi_in,
+                           "Advertising an uncommon hardware address!");
     }
 
     return RAT_OK;

@@ -212,13 +212,13 @@ static int rat_opt_rdnss_show (struct rat_mod_functions *mf,
     char buffer[RAT_6ADDR_STRSIZ];
     RAT_DEBUG_TRACE();
 
-    mf->mf_title(1, "Recursive DNS Server Option `%s':", mi->mi_myname);
+    mf->mf_title(mi->mi_in, "Recursive DNS Server Option `%s':", mi->mi_myname);
 
-    mf->mf_param(1, "State");
+    mf->mf_param(mi->mi_in, "State");
     mf->mf_value("%s", rds->rds_enabled ? "Enabled" : "Disabled");
     mf->mf_info(NULL);
 
-    mf->mf_param(1, "Lifeime");
+    mf->mf_param(mi->mi_in, "Lifeime");
     mf->mf_value("%" PRIu32, rds->rds_lifetime);
     if (rds->rds_lifetime == RAT_OPT_RDNSS_LIFE_INF)
         mf->mf_info("Infinity");
@@ -226,36 +226,32 @@ static int rat_opt_rdnss_show (struct rat_mod_functions *mf,
         mf->mf_info("RDNSS not valid");
     else
         mf->mf_info("%ud %uh %um %us",
-                  RAT_MOD_S_D_TO_D(rds->rds_lifetime),
-                  RAT_MOD_S_D_TO_H(rds->rds_lifetime),
-                  RAT_MOD_S_D_TO_M(rds->rds_lifetime),
-                  RAT_MOD_S_D_TO_S(rds->rds_lifetime));
+                  RAT_LIB_S_D_TO_D(rds->rds_lifetime),
+                  RAT_LIB_S_D_TO_H(rds->rds_lifetime),
+                  RAT_LIB_S_D_TO_M(rds->rds_lifetime),
+                  RAT_LIB_S_D_TO_S(rds->rds_lifetime));
     if (rds->rds_lifetime < RAT_OPT_RDNSS_LIFE_MIN(mi->mi_maxadvint))
-        mf->mf_comment(1, "Warning: Lifetime too short!");
+        mf->mf_comment(mi->mi_in, "Warning: Lifetime too short!");
     if (rds->rds_lifetime != RAT_OPT_RDNSS_LIFE_INF &&
         rds->rds_lifetime > RAT_OPT_RDNSS_LIFE_MAX(mi->mi_maxadvint))
-        mf->mf_comment(1, "Warning: Lifetime too long!");
+        mf->mf_comment(mi->mi_in, "Warning: Lifetime too long!");
 
-    if (rds->rds_srv) {
-        mf->mf_param(1, "Servers");
-        mf->mf_value(NULL);
+    for (srv = rds->rds_srv; srv; srv = srv->srv_next) {
+        mf->mf_param(mi->mi_in, "Server");
+        rat_lib_6addr_to_str(buffer, sizeof(buffer), &srv->srv_addr);
+        mf->mf_value("%s", buffer);
         mf->mf_info(NULL);
-        for (srv = rds->rds_srv; srv; srv = srv->srv_next) {
-            mf->mf_param(2, "Address");
-            rat_lib_6addr_to_str(buffer, sizeof(buffer), &srv->srv_addr);
-            mf->mf_value("%s", buffer);
-            mf->mf_info(NULL);
-            if (rat_lib_6addr_is_documentation(&srv->srv_addr))
-                mf->mf_comment(2, "Warning: Documentation prefix!");
-            if (rat_lib_6addr_is_multicast(&srv->srv_addr))
-                mf->mf_comment(2, "Warning: Multicast prefix!");
-            if (rat_lib_6addr_is_linklocal(&srv->srv_addr))
-                mf->mf_comment(2, "Warning: Link-local prefix!");
-            if (rat_lib_6addr_is_unspecified(&srv->srv_addr))
-                mf->mf_comment(2, "Warning: Unspecified prefix!");
-        }
-    } else {
-        mf->mf_param(1, "Warning");
+        if (rat_lib_6addr_is_documentation(&srv->srv_addr))
+            mf->mf_comment(mi->mi_in + 1, "Warning: Documentation prefix!");
+        if (rat_lib_6addr_is_multicast(&srv->srv_addr))
+            mf->mf_comment(mi->mi_in + 1, "Warning: Multicast prefix!");
+        if (rat_lib_6addr_is_linklocal(&srv->srv_addr))
+            mf->mf_comment(mi->mi_in + 1, "Warning: Link-local prefix!");
+        if (rat_lib_6addr_is_unspecified(&srv->srv_addr))
+            mf->mf_comment(mi->mi_in + 1, "Warning: Unspecified prefix!");
+    }
+    if (!rds->rds_srv) {
+        mf->mf_param(mi->mi_in, "Warning");
         mf->mf_value("Empty server list!");
         mf->mf_info(NULL);
     }
@@ -291,10 +287,10 @@ static int rat_opt_rdnss_dump (struct rat_mod_functions *mf,
                            mi->mi_myname);
         } else {
             mf->mf_message("%s set lifetime %ud%uh%um%us", mi->mi_myname,
-                           RAT_MOD_S_D_TO_D(rds->rds_lifetime),
-                           RAT_MOD_S_D_TO_H(rds->rds_lifetime),
-                           RAT_MOD_S_D_TO_M(rds->rds_lifetime),
-                           RAT_MOD_S_D_TO_S(rds->rds_lifetime));
+                           RAT_LIB_S_D_TO_D(rds->rds_lifetime),
+                           RAT_LIB_S_D_TO_H(rds->rds_lifetime),
+                           RAT_LIB_S_D_TO_M(rds->rds_lifetime),
+                           RAT_LIB_S_D_TO_S(rds->rds_lifetime));
         }
     }
 
@@ -389,17 +385,15 @@ static int rat_opt_rdnss_set_lifetime (struct rat_mod_functions *mf,
     lifetime = *((uint32_t *) data);
 
     if (lifetime < RAT_OPT_RDNSS_LIFE_MIN(mi->mi_maxadvint)) {
-        mf->mf_error("Invalid value `%" PRIu32 "'!\n" \
-                     "Must not be less than maximum interval (%" PRIu32 ").",
-                     lifetime, mi->mi_maxadvint);
-        goto exit_err;
+        mf->mf_message("Warning: Invalid lifetime `%" PRIu32 "'!\n" \
+                       "Must not be less than maximum interval (%" PRIu32 ").",
+                       lifetime, mi->mi_maxadvint);
     }
     if (lifetime > RAT_OPT_RDNSS_LIFE_MAX(mi->mi_maxadvint)) {
-        mf->mf_error("Invalid value `%" PRIu32 "'!\n" \
-                     "Must not be more than two times maximum interval " \
-                     "(%" PRIu32 ").",
-                     lifetime, RAT_OPT_RDNSS_LIFE_MAX(mi->mi_maxadvint));
-        goto exit_err;
+        mf->mf_message("Warning: Invalid lifetime `%" PRIu32 "'!\n" \
+                       "Must not be more than two times maximum interval " \
+                       "(%" PRIu32 ").",
+                       lifetime, RAT_OPT_RDNSS_LIFE_MAX(mi->mi_maxadvint));
     }
     rds->rds_lifetime = lifetime;
 

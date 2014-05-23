@@ -204,7 +204,7 @@ static int rat_rad_ctl_print_error (const char *fmt, ...)
  * @see rat_rad_ctl_print_info()
  * @see rat_rad_ctl_print_comment()
  */
-static int rat_rad_ctl_print_title (uint8_t indent, const char *fmt, ...)
+static int rat_rad_ctl_print_title (uint8_t in, const char *fmt, ...)
 {
     char tmp[RAT_CTL_REPLY_MSG_LEN + 1];
     struct rat_ctl_reply cry;
@@ -217,8 +217,11 @@ static int rat_rad_ctl_print_title (uint8_t indent, const char *fmt, ...)
     vsnprintf(tmp, RAT_CTL_REPLY_MSG_LEN, fmt, arglist);
     va_end(arglist);
 
-    indent *= 2;
-    snprintf(cry.cry_msg, RAT_CTL_REPLY_MSG_LEN, "%*s%s\n", indent, " ", tmp);
+    in *= 2;
+    if (in)
+		snprintf(cry.cry_msg, RAT_CTL_REPLY_MSG_LEN, "%*s%s\n", in, " ", tmp);
+	else
+		snprintf(cry.cry_msg, RAT_CTL_REPLY_MSG_LEN, "%s\n", tmp);
 
     return __rat_rad_ctl_send_reply(&cry);
 }
@@ -525,6 +528,7 @@ static int rat_rad_fill_mi_ra (struct rat_db *db, struct rat_mod_instance *mi)
     memset(mi, 0x0, sizeof(*mi));
     mi->mi_ifindex = RAT_DB_IFINDEX(db);
     mi->mi_index = 0;
+    mi->mi_in = 0;
 
     /* human readable name of instance*/
     snprintf(mi->mi_myname, sizeof(mi->mi_myname), RAT_RAMODNAME "@%s",
@@ -566,6 +570,7 @@ static int rat_rad_fill_mi_opt (struct rat_db *db, struct rat_db_opt *opt,
     /* craft instance information */
     memset(mi, 0x0, sizeof(*mi));
     mi->mi_ifindex = RAT_DB_IFINDEX(db);
+    mi->mi_in = 1;
 
     /* index and human readable name of instance */
     if (rat_mod_requires_oid(opt->opt_mid)) {
@@ -1301,7 +1306,7 @@ static int rat_rad_ra_show (struct rat_db *db)
 
     rat_rad_fill_mi_ra(db, &mi);
 
-    rat_rad_mf.mf_message("Router Advertisement `%s':", mi.mi_myname);
+    rat_rad_mf.mf_title(0, "Router Advertisement `%s':", mi.mi_myname);
 
     rat_rad_mf.mf_param(0, "State");
     switch (db->db_state) {
@@ -1414,18 +1419,18 @@ static int rat_rad_ra_show (struct rat_db *db)
     rat_rad_mf.mf_param(0, "Maximum Interval");
     rat_rad_mf.mf_value("%" PRIu16, db->db_maxadvint);
     rat_rad_mf.mf_info("%ud %uh %um %us",
-                       RAT_MOD_S_D_TO_D(db->db_maxadvint),
-                       RAT_MOD_S_D_TO_H(db->db_maxadvint),
-                       RAT_MOD_S_D_TO_M(db->db_maxadvint),
-                       RAT_MOD_S_D_TO_S(db->db_maxadvint));
+                       RAT_LIB_S_D_TO_D(db->db_maxadvint),
+                       RAT_LIB_S_D_TO_H(db->db_maxadvint),
+                       RAT_LIB_S_D_TO_M(db->db_maxadvint),
+                       RAT_LIB_S_D_TO_S(db->db_maxadvint));
 
     rat_rad_mf.mf_param(0, "Minimum Interval");
     rat_rad_mf.mf_value("%" PRIu16, db->db_minadvint);
     rat_rad_mf.mf_info("%ud %uh %um %us",
-                       RAT_MOD_S_D_TO_D(db->db_minadvint),
-                       RAT_MOD_S_D_TO_H(db->db_minadvint),
-                       RAT_MOD_S_D_TO_M(db->db_minadvint),
-                       RAT_MOD_S_D_TO_S(db->db_minadvint));
+                       RAT_LIB_S_D_TO_D(db->db_minadvint),
+                       RAT_LIB_S_D_TO_H(db->db_minadvint),
+                       RAT_LIB_S_D_TO_M(db->db_minadvint),
+                       RAT_LIB_S_D_TO_S(db->db_minadvint));
 
     /* statistics */
     rat_rad_mf.mf_param(0, "Solicited/Unsolicited");
@@ -1521,20 +1526,18 @@ static int rat_rad_ra_dump (struct rat_db *db)
     rat_rad_mf.mf_message("%s create", mi.mi_myname);
 
     if (db->db_maxadvint != RAT_DB_MAXADVINT_DEF)
-        rat_rad_mf.mf_message("%s set maximum-interval %ud%uh%um%us",
+        rat_rad_mf.mf_message("%s set maximum-interval %uh%um%us",
                               mi.mi_myname,
-                              RAT_MOD_S_D_TO_D(db->db_maxadvint),
-                              RAT_MOD_S_D_TO_H(db->db_maxadvint),
-                              RAT_MOD_S_D_TO_M(db->db_maxadvint),
-                              RAT_MOD_S_D_TO_S(db->db_maxadvint));
+                              RAT_LIB_S_H_TO_H(db->db_maxadvint),
+                              RAT_LIB_S_H_TO_M(db->db_maxadvint),
+                              RAT_LIB_S_H_TO_S(db->db_maxadvint));
 
     if (db->db_minadvint != RAT_DB_MINADVINT_DEF)
-        rat_rad_mf.mf_message("%s set minimum-interval %ud%uh%um%us",
+        rat_rad_mf.mf_message("%s set minimum-interval %uh%um%us",
                               mi.mi_myname,
-                              RAT_MOD_S_D_TO_D(db->db_minadvint),
-                              RAT_MOD_S_D_TO_H(db->db_minadvint),
-                              RAT_MOD_S_D_TO_M(db->db_minadvint),
-                              RAT_MOD_S_D_TO_S(db->db_minadvint));
+                              RAT_LIB_S_H_TO_H(db->db_minadvint),
+                              RAT_LIB_S_H_TO_M(db->db_minadvint),
+                              RAT_LIB_S_H_TO_S(db->db_minadvint));
 
     ret = rat_mod_rad_call_aid(&rat_rad_mf, &mi, rat_rad_ra_mid,
                                RAT_MOD_AID_DUMP);
@@ -1771,11 +1774,11 @@ static int rat_rad_ra_set_maxadvint (struct rat_db *db, uint8_t *data,
 
     /* lower boundary check (must not come too close to minimum interval */
     if (advint < rat_rad_ra_maxadvint_min(db)) {
-        rat_rad_mf.mf_error("Invalid Maximum Interval `%" PRIu16 "'!", advint);
+        rat_rad_mf.mf_message("Warning: Invalid maximum interval " \
+                              "`%" PRIu16 "'!", advint);
         rat_rad_mf.mf_message("Must not be less than 1.3 times " \
                               "Minimum Interval (%" PRIu16 ").",
                               rat_rad_ra_maxadvint_min(db));
-        goto exit_err;
     }
 
     /*
@@ -1824,11 +1827,11 @@ static int rat_rad_ra_set_minadvint (struct rat_db *db, uint8_t *data,
     }
     /* upper boundary check (must not come too close to maximum interval */
     if (advint > rat_rad_ra_minadvint_max(db)) {
-        rat_rad_mf.mf_error("Invalid Minimum Interval `%" PRIu16 "'!", advint);
+        rat_rad_mf.mf_message("Warning: Invalid minimum interval " \
+                              "`%" PRIu16 "'!", advint);
         rat_rad_mf.mf_message("Must not be greater than 0.75 times " \
                               "Maximum Interval (%" PRIu16 ").",
                               rat_rad_ra_minadvint_max(db));
-        goto exit_err;
     }
 
     /*
@@ -2077,6 +2080,7 @@ static int rat_rad_exec_module (struct rat_ctl_request *crq)
                     goto exit_err_release;
                 }
                 rat_rad_fill_mi_opt(db, opt, &mi);
+                RAT_MOD_MI_IN(&mi, 0);
                 if (rat_mod_rad_call_aid(&rat_rad_mf, &mi, crq->crq_mid,
                                          crq->crq_aid) == RAT_OK) {
                     rat_db_updated(db);

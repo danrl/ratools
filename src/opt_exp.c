@@ -162,22 +162,22 @@ static int rat_opt_exp_show (struct rat_mod_functions *mf,
                 )];
     RAT_DEBUG_TRACE();
 
-    mf->mf_title(1, "Experimental Option `%s':", mi->mi_myname);
+    mf->mf_title(mi->mi_in, "Experimental Option `%s':", mi->mi_myname);
 
-    mf->mf_param(1, "State");
+    mf->mf_param(mi->mi_in, "State");
     mf->mf_value("%s", exp->exp_enabled ? "Enabled" : "Disabled");
     mf->mf_info(NULL);
 
-    mf->mf_param(1, "Type");
+    mf->mf_param(mi->mi_in, "Type");
     mf->mf_value("%" PRIu8, exp->exp_type);
     mf->mf_info(NULL);
 
-    mf->mf_param(1, "Payload Length");
+    mf->mf_param(mi->mi_in, "Payload Length");
     mf->mf_value("%" PRIu8, exp->exp_len);
     rat_lib_bytes_to_str(buffer, sizeof(buffer), exp->exp_len);
     mf->mf_info(buffer);
 
-    mf->mf_param(1, "Payload");
+    mf->mf_param(mi->mi_in, "Payload");
     rat_opt_exp_payload_to_str(buffer, sizeof(buffer), exp);
     mf->mf_value("%s", buffer);
     mf->mf_info(NULL);

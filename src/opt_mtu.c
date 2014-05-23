@@ -126,17 +126,17 @@ static int rat_opt_mtu_show (struct rat_mod_functions *mf,
     struct rat_opt_mtu_private *mtu = RAT_MOD_PRIVATE(mi);
     RAT_DEBUG_TRACE();
 
-    mf->mf_title(1, "Link-MTU Option `%s':", mi->mi_myname);
+    mf->mf_title(mi->mi_in, "Link-MTU Option `%s':", mi->mi_myname);
 
-    mf->mf_param(1, "State");
+    mf->mf_param(mi->mi_in, "State");
     mf->mf_value("%s", mtu->mtu_enabled ? "Enabled" : "Disabled");
     mf->mf_info(NULL);
 
-    mf->mf_param(1, "Auto-detection");
+    mf->mf_param(mi->mi_in, "Auto-detection");
     mf->mf_value("%s", mtu->mtu_autodetect ? "On" : "Off");
     mf->mf_info(NULL);
 
-    mf->mf_param(1, "Link-MTU");
+    mf->mf_param(mi->mi_in, "Link-MTU");
     if (mtu->mtu_autodetect) {
         mf->mf_value("%" PRIu32, mi->mi_linkmtu);
         mf->mf_info(NULL);
@@ -144,7 +144,7 @@ static int rat_opt_mtu_show (struct rat_mod_functions *mf,
         mf->mf_value("%" PRIu32, mtu->mtu_linkmtu);
         mf->mf_info(NULL);
         if (RAT_OPT_MTU_UNCOMMON(mtu->mtu_linkmtu))
-            mf->mf_comment(1, "Advertising an uncommon link MTU!");
+            mf->mf_comment(mi->mi_in, "Advertising an uncommon link MTU!");
     }
 
     return RAT_OK;
