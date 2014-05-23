@@ -98,7 +98,7 @@ struct in6_pktinfo {
 /**
  * @brief Aligning space x to chunk size y
  */
-#define ALIGN(x,y)              ((((x) / (y)) * (y)) + ((x) % (y) ? (y) : 0))
+#define ALIGN(x,y)              ((((x) / (y)) * (y)) + (((x) % (y)) ? (y) : 0))
 
 
 /** @brief A meta-macro to convert numbers to strings. i heard u like... */

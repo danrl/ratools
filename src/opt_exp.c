@@ -108,15 +108,14 @@ exit_err:
 static int rat_opt_exp_compile (struct rat_mod_instance *mi)
 {
     struct rat_opt_exp_private *exp = RAT_MOD_PRIVATE(mi);
-    struct nd_opt_hdr *raw = RAT_MOD_RAWDATA(mi);
+    uint8_t *raw = RAT_MOD_RAWDATA(mi);
     uint16_t rawlen;
     RAT_DEBUG_TRACE();
 
     if (!exp->exp_enabled)
         goto exit_ok;
 
-    rawlen = ALIGN(sizeof(*raw) +
-                   MIN(exp->exp_len, RAT_OPT_EXP_PAYLOAD_MAXLEN), 8);
+    rawlen = ALIGN(2 + MIN(exp->exp_len, RAT_OPT_EXP_PAYLOAD_MAXLEN), 8);
 
     /* allocate memory for raw data */
     if (!raw)
@@ -126,10 +125,10 @@ static int rat_opt_exp_compile (struct rat_mod_instance *mi)
         goto exit_err;
     }
 
-    raw->nd_opt_type = exp->exp_type;
-    raw->nd_opt_len = rawlen / 8;
+    raw[0] = exp->exp_type;
+    raw[1] = rawlen / 8;
 
-    memcpy(((uint8_t *) raw) + sizeof(*raw), &exp->exp_payload,
+    memcpy(((uint8_t *) raw) + 2, &exp->exp_payload,
            MIN(sizeof(exp->exp_payload), exp->exp_len));
 
     /* write back changes */
