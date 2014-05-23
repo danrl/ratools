@@ -344,17 +344,14 @@ static int rat_ra_set_curhl (struct rat_mod_functions *mf,
                              uint8_t *data, uint16_t len)
 {
     struct rat_ra_private *ra = RAT_MOD_PRIVATE(mi);
-    uint8_t curhl;
     RAT_DEBUG_TRACE();
     RAT_DISCARD_UNUSED(mf);
 
-    if (len < sizeof(curhl))
+    if (len < sizeof(uint8_t))
         goto exit_err;
 
-    curhl = *((uint8_t *) data);
     /* no further checks required */
-
-    ra->ra_curhl = curhl;
+    ra->ra_curhl = *((uint8_t *) data);
 
     return RAT_OK;
 

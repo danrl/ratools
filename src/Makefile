@@ -28,6 +28,7 @@ ractl: \
 	opt_sll.o       \
 	opt_pi.o        \
 	opt_rdnss.o     \
+	opt_exp.o       \
 	ractl.o
 	[ -d "$(BINDIR)" ] || mkdir "$(BINDIR)"
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
@@ -46,6 +47,7 @@ rad: \
 	opt_sll.o       \
 	opt_pi.o        \
 	opt_rdnss.o     \
+	opt_exp.o       \
 	rad.o
 	[ -d "$(BINDIR)" ] || mkdir "$(BINDIR)"
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
@@ -59,6 +61,7 @@ racomplete-ractl: \
 	opt_sll.o       \
 	opt_pi.o        \
 	opt_rdnss.o     \
+	opt_exp.o       \
 	racomplete-ractl.o
 	[ -d "$(BINDIR)" ] || mkdir "$(BINDIR)"
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
