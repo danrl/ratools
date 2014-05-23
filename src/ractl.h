@@ -55,9 +55,9 @@
                                 "^dump?$"
 
 #define RAT_RACTL_REGEX_LOG     "^lo?$|" \
-								"^logl?$|" \
-								"^loglev?$|" \
-								"^loglevel?$"
+                                "^logl?$|" \
+                                "^loglev?$|" \
+                                "^loglevel?$"
 
 #define RAT_RACTL_REGEX_ERROR   "^er?$|" \
                                 "^erro?$|" \
