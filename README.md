@@ -170,6 +170,7 @@ Please make sure to always use the latest version before reporting bugs. Thanks!
 
     $ ractl version
     ra@dummy0 create
+    ra@dummy0 enable
     mtu@dummy0 create
     mtu@dummy0 enable
     sll@dummy0 create
