@@ -20,6 +20,7 @@
 
 #include "ra.h"
 
+#include "library.h"
 #include "log.h"
 #include "module.h"
 
@@ -172,29 +173,29 @@ static int rat_ra_show (struct rat_mod_functions *mf,
     struct rat_ra_private *ra = RAT_MOD_PRIVATE(mi);
     RAT_DEBUG_TRACE();
 
-    mf->mf_param(0, "Current Hop Limit");
+    mf->mf_param(mi->mi_in, "Current Hop Limit");
     mf->mf_value("%" PRIu8, ra->ra_curhl);
     if (ra->ra_curhl == RAT_RA_CURHL_UNSPEC)
         mf->mf_info("Unspecified");
     else
         mf->mf_info(NULL);
 
-    mf->mf_param(0, "Managed Flag");
+    mf->mf_param(mi->mi_in, "Managed Flag");
     mf->mf_value("%s", ra->ra_managed ? "1" : "0");
     mf->mf_info("%s%s", ra->ra_managed ? "" : "No ",
                  "Managed Address Configuration");
 
-    mf->mf_param(0, "Other Managed Flag");
+    mf->mf_param(mi->mi_in, "Other Managed Flag");
     mf->mf_value("%s", ra->ra_other ? "1" : "0");
     mf->mf_info("%s%s", ra->ra_other ? "" : "No ",
                  "Other Managed Configuration");
 
-    mf->mf_param(0, "Home Agent Flag");
+    mf->mf_param(mi->mi_in, "Home Agent Flag");
     mf->mf_value("%s", ra->ra_homeagent ? "1" : "0");
     mf->mf_info("%s%s", ra->ra_homeagent ? "" : "No ",
                  "Mobile IPv6 Home Agent");
 
-    mf->mf_param(0, "Router Preference");
+    mf->mf_param(mi->mi_in, "Router Preference");
     switch (ra->ra_preference) {
         case RAT_RA_PREF_LOW:
             mf->mf_value("11");
@@ -211,45 +212,42 @@ static int rat_ra_show (struct rat_mod_functions *mf,
         default:
             mf->mf_value("10");
             mf->mf_info("Reserved");
-            mf->mf_comment(0, "Router advertises a reserved value!");
+            mf->mf_comment(mi->mi_in, "Router advertises a reserved value!");
             break;
     }
 
-    mf->mf_param(0, "NDP Proxy Flag");
+    mf->mf_param(mi->mi_in, "NDP Proxy Flag");
     mf->mf_value("%s", ra->ra_proxy ? "1" : "0");
     mf->mf_info("%s%s", ra->ra_proxy ? "" : "No ", "NDP Proxy");
 
 
-    mf->mf_param(0, "Lifetime");
+    mf->mf_param(mi->mi_in, "Lifetime");
     mf->mf_value("%" PRIu16, ra->ra_lifetime);
     if (ra->ra_lifetime)
         mf->mf_info("%uh %um %us",
-                  /* macro is for days in seconds, but this is no overflow
-                   * here since max lifetime is 9000
-                   */
-                  RAT_MOD_S_D_TO_H(ra->ra_lifetime),
-                  RAT_MOD_S_D_TO_M(ra->ra_lifetime),
-                  RAT_MOD_S_D_TO_S(ra->ra_lifetime));
+                  RAT_LIB_S_H_TO_H(ra->ra_lifetime),
+                  RAT_LIB_S_H_TO_M(ra->ra_lifetime),
+                  RAT_LIB_S_H_TO_S(ra->ra_lifetime));
     else
         mf->mf_info("No Default Router");
     if (ra->ra_lifetime > RAT_RA_LIFETIME_MAX)
-        mf->mf_comment(0, "Illegal Router Lifetime!");
+        mf->mf_comment(mi->mi_in, "Illegal Router Lifetime!");
 
-    mf->mf_param(0, "Reachable Time");
+    mf->mf_param(mi->mi_in, "Reachable Time");
     mf->mf_value("%" PRIu32, ra->ra_reachable);
     mf->mf_info("%uh %um %us %ums",
-              RAT_MOD_MS_H_TO_H(ra->ra_reachable),
-              RAT_MOD_MS_H_TO_M(ra->ra_reachable),
-              RAT_MOD_MS_H_TO_S(ra->ra_reachable),
-              RAT_MOD_MS_H_TO_MS(ra->ra_reachable));
+              RAT_LIB_MS_H_TO_H(ra->ra_reachable),
+              RAT_LIB_MS_H_TO_M(ra->ra_reachable),
+              RAT_LIB_MS_H_TO_S(ra->ra_reachable),
+              RAT_LIB_MS_H_TO_MS(ra->ra_reachable));
 
-    mf->mf_param(0, "Retransmission Timer");
+    mf->mf_param(mi->mi_in, "Retransmission Timer");
     mf->mf_value("%" PRIu32, ra->ra_retrans);
     mf->mf_info("%uh %um %us %ums",
-              RAT_MOD_MS_H_TO_H(ra->ra_retrans),
-              RAT_MOD_MS_H_TO_M(ra->ra_retrans),
-              RAT_MOD_MS_H_TO_S(ra->ra_retrans),
-              RAT_MOD_MS_H_TO_MS(ra->ra_retrans));
+              RAT_LIB_MS_H_TO_H(ra->ra_retrans),
+              RAT_LIB_MS_H_TO_M(ra->ra_retrans),
+              RAT_LIB_MS_H_TO_S(ra->ra_retrans),
+              RAT_LIB_MS_H_TO_MS(ra->ra_retrans));
 
     return RAT_OK;
 }
@@ -302,25 +300,22 @@ static int rat_ra_dump (struct rat_mod_functions *mf,
                        ra->ra_proxy ? "on" : "off");
     if (ra->ra_lifetime != RAT_RA_LIFETIME_DEF)
         mf->mf_message("%s set lifetime %uh%um%us", mi->mi_myname,
-                       /* macro is for days in seconds, but this is no overflow
-                        * here since max lifetime is 9000
-                        */
-                       RAT_MOD_S_D_TO_H(ra->ra_lifetime),
-                       RAT_MOD_S_D_TO_M(ra->ra_lifetime),
-                       RAT_MOD_S_D_TO_S(ra->ra_lifetime));
+                       RAT_LIB_S_H_TO_H(ra->ra_lifetime),
+                       RAT_LIB_S_H_TO_M(ra->ra_lifetime),
+                       RAT_LIB_S_H_TO_S(ra->ra_lifetime));
     if (ra->ra_reachable != RAT_RA_REACHABLE_DEF)
         mf->mf_message("%s set reachable-time %uh%um%us%ums", mi->mi_myname,
-                       RAT_MOD_MS_H_TO_H(ra->ra_reachable),
-                       RAT_MOD_MS_H_TO_M(ra->ra_reachable),
-                       RAT_MOD_MS_H_TO_S(ra->ra_reachable),
-                       RAT_MOD_MS_H_TO_MS(ra->ra_reachable));
+                       RAT_LIB_MS_H_TO_H(ra->ra_reachable),
+                       RAT_LIB_MS_H_TO_M(ra->ra_reachable),
+                       RAT_LIB_MS_H_TO_S(ra->ra_reachable),
+                       RAT_LIB_MS_H_TO_MS(ra->ra_reachable));
     if (ra->ra_retrans != RAT_RA_RETRANS_DEF)
         mf->mf_message("%s set retransmission-timer %uh%um%us%ums",
                        mi->mi_myname,
-                       RAT_MOD_MS_H_TO_H(ra->ra_retrans),
-                       RAT_MOD_MS_H_TO_M(ra->ra_retrans),
-                       RAT_MOD_MS_H_TO_S(ra->ra_retrans),
-                       RAT_MOD_MS_H_TO_MS(ra->ra_retrans));
+                       RAT_LIB_MS_H_TO_H(ra->ra_retrans),
+                       RAT_LIB_MS_H_TO_M(ra->ra_retrans),
+                       RAT_LIB_MS_H_TO_S(ra->ra_retrans),
+                       RAT_LIB_MS_H_TO_MS(ra->ra_retrans));
 
     return RAT_OK;
 }
@@ -561,10 +556,9 @@ static int rat_ra_set_lifetime (struct rat_mod_functions *mf,
      */
     if ((lifetime != RAT_RA_LIFETIME_NODEF) &&
         (lifetime < mi->mi_maxadvint)) {
-        mf->mf_error("Invalid lifetime `%" PRIu16 "'! " \
-                     "Must not be less than maximum interval (%" PRIu16 ").",
-                     lifetime, mi->mi_maxadvint);
-        goto exit_err;
+        mf->mf_message("Warning: Invalid lifetime `%" PRIu16 "'! " \
+                       "Must not be less than maximum interval (%" PRIu16 ").",
+                       lifetime, mi->mi_maxadvint);
     }
     /*
      * If the Router Lifetime is zero, the preference value MUST be set
@@ -574,10 +568,9 @@ static int rat_ra_set_lifetime (struct rat_mod_functions *mf,
      */
     if (lifetime == RAT_RA_LIFETIME_NODEF &&
         ra->ra_preference != RAT_RA_PREF_MEDIUM) {
-        mf->mf_error("Invalid lifetime `%" PRIu16 "'! " \
-                     "Zero lifetime requires medium router preference.",
-                     lifetime);
-        goto exit_err;
+        mf->mf_message("Warning: Invalid lifetime `%" PRIu16 "'! " \
+                       "Zero lifetime requires medium router preference.",
+                       lifetime);
     }
 
     ra->ra_lifetime = lifetime;
@@ -776,9 +769,9 @@ static struct rat_mod_valreg rat_ra_reg_set_maxint[] = {
         .mvr_parse              = rat_mod_generic_set_val_uint16,
     },
     {
-        .mvr_regex              = "^[0-9]{1,2}m[0-9]{1,2}s$",
-        .mvr_help               = "10m0s",
-        .mvr_parse              = rat_mod_generic_set_val_minsec16,
+        .mvr_regex              = "^[0-9]{1,2}h[0-9]{1,2}m[0-9]{1,2}s$",
+        .mvr_help               = "0h10m0s",
+        .mvr_parse              = rat_mod_generic_set_val_hminsec16,
     }
 };
 
@@ -793,9 +786,9 @@ static struct rat_mod_valreg rat_ra_reg_set_minint[] = {
         .mvr_parse              = rat_mod_generic_set_val_uint16,
     },
     {
-        .mvr_regex              = "^[0-9]{1,2}m[0-9]{1,2}s$",
-        .mvr_help               = "0m3s",
-        .mvr_parse              = rat_mod_generic_set_val_minsec16,
+        .mvr_regex              = "^[0-9]{1,2}h[0-9]{1,2}m[0-9]{1,2}s$",
+        .mvr_help               = "0h0m3s",
+        .mvr_parse              = rat_mod_generic_set_val_hminsec16,
     }
 };
 

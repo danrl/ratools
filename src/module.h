@@ -72,27 +72,6 @@
 /** @} */
 
 
-/* --- time conversion ------------------------------------------------------ */
-
-
-/** convert seconds to day, hour, minute and second */
-/** @{ */
-#define RAT_MOD_S_D_TO_D(x)     ((x) / (60 * 60 * 24))
-#define RAT_MOD_S_D_TO_H(x)     (((x) % (60 * 60 * 24)) / (60 * 60))
-#define RAT_MOD_S_D_TO_M(x)     (((x) % (60 * 60)) / 60)
-#define RAT_MOD_S_D_TO_S(x)     ((x) % 60)
-/** @} */
-
-
-/** convert milliseconds to hour, minute, second and millisecond */
-/** @{ */
-#define RAT_MOD_MS_H_TO_H(x)    ((x) / (1000 * 60 * 60))
-#define RAT_MOD_MS_H_TO_M(x)    (((x) / (1000 * 60)) % 60)
-#define RAT_MOD_MS_H_TO_S(x)    (((x) % (1000 * 60)) / 1000)
-#define RAT_MOD_MS_H_TO_MS(x)   ((x) % 1000)
-/** @} */
-
-
 /* --- module registry data structures -------------------------------------- */
 
 
@@ -113,6 +92,8 @@ struct rat_mod_instance {
     char                        mi_myname[RAT_MODNAMELEN +
                                           RAT_INDEXSTRLEN + 1 +
                                           RAT_IFNAMELEN + 1];
+    /** Output intendation hint */
+    uint8_t                     mi_in;
     /** Pointer to instance private data */
     void                        *mi_private;
     /** Pointer to instance raw icmp6 raw data */
@@ -131,6 +112,10 @@ struct rat_mod_instance {
     struct rat_hwaddr           mi_hwaddr;
     /** @} */
 };
+
+
+/** Set output intendation hint */
+#define RAT_MOD_MI_IN(mi, in)   (((struct rat_mod_instance *) mi)->mi_in = in)
 
 /** Macro to access the private data directly */
 #define RAT_MOD_PRIVATE(mi)                                                 \

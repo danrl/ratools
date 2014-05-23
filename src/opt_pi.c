@@ -138,27 +138,27 @@ static int rat_opt_pi_show (struct rat_mod_functions *mf,
     char buffer[RAT_PREFIX_STRSIZ];
     RAT_DEBUG_TRACE();
 
-    mf->mf_title(1, "Prefix Information Option `%s':", mi->mi_myname);
+    mf->mf_title(mi->mi_in, "Prefix Information Option `%s':", mi->mi_myname);
 
-    mf->mf_param(1, "State");
+    mf->mf_param(mi->mi_in, "State");
     mf->mf_value("%s", pi->pi_enabled ? "Enabled" : "Disabled");
     mf->mf_info(NULL);
 
-    mf->mf_param(1, "On-link Flag");
+    mf->mf_param(mi->mi_in, "On-link Flag");
     mf->mf_value("%s", pi->pi_onlink ? "1" : "0");
     mf->mf_info("%s%s", pi->pi_onlink ? "" : "No ", "On-link Prefix");
 
-    mf->mf_param(1, "Autonomous Flag");
+    mf->mf_param(mi->mi_in, "Autonomous Flag");
     mf->mf_value("%s", pi->pi_auto ? "1" : "0");
     mf->mf_info("%s%s", pi->pi_auto ? "" : "No ",
                 "Autonomous Address Configuration");
 
-    mf->mf_param(1, "Router Address Flag");
+    mf->mf_param(mi->mi_in, "Router Address Flag");
     mf->mf_value("%s", pi->pi_rtraddr ? "1" : "0");
     mf->mf_info("%s%s", pi->pi_rtraddr ? "" : "No ",
                 "Mobile IPv6 Router Address");
 
-    mf->mf_param(1, "Valid Time");
+    mf->mf_param(mi->mi_in, "Valid Time");
     mf->mf_value("%" PRIu32, pi->pi_valid);
     if (pi->pi_valid == RAT_OPT_PI_VALID_INF)
         mf->mf_info("Infinity");
@@ -166,12 +166,12 @@ static int rat_opt_pi_show (struct rat_mod_functions *mf,
         mf->mf_info("Prefix not valid");
     else
         mf->mf_info("%ud %uh %um %us",
-                  RAT_MOD_S_D_TO_D(pi->pi_valid),
-                  RAT_MOD_S_D_TO_H(pi->pi_valid),
-                  RAT_MOD_S_D_TO_M(pi->pi_valid),
-                  RAT_MOD_S_D_TO_S(pi->pi_valid));
+                  RAT_LIB_S_D_TO_D(pi->pi_valid),
+                  RAT_LIB_S_D_TO_H(pi->pi_valid),
+                  RAT_LIB_S_D_TO_M(pi->pi_valid),
+                  RAT_LIB_S_D_TO_S(pi->pi_valid));
 
-    mf->mf_param(1, "Preferred Time");
+    mf->mf_param(mi->mi_in, "Preferred Time");
     mf->mf_value("%" PRIu32, pi->pi_preferred);
     if (pi->pi_preferred == RAT_OPT_PI_PREF_INF)
         mf->mf_info("Infinity");
@@ -179,27 +179,28 @@ static int rat_opt_pi_show (struct rat_mod_functions *mf,
         mf->mf_info("Prefix not preferred");
     else
         mf->mf_info("%ud %uh %um %us",
-                  RAT_MOD_S_D_TO_D(pi->pi_preferred),
-                  RAT_MOD_S_D_TO_H(pi->pi_preferred),
-                  RAT_MOD_S_D_TO_M(pi->pi_preferred),
-                  RAT_MOD_S_D_TO_S(pi->pi_preferred));
+                  RAT_LIB_S_D_TO_D(pi->pi_preferred),
+                  RAT_LIB_S_D_TO_H(pi->pi_preferred),
+                  RAT_LIB_S_D_TO_M(pi->pi_preferred),
+                  RAT_LIB_S_D_TO_S(pi->pi_preferred));
 
-    mf->mf_param(1, "Prefix");
+    mf->mf_param(mi->mi_in, "Prefix");
     rat_lib_prefix_to_str(buffer, sizeof(buffer), &pi->pi_prefix);
     mf->mf_value("%s", buffer);
     mf->mf_info(NULL);
     if (rat_lib_6addr_is_documentation(&pi->pi_prefix.pfx_addr))
-        mf->mf_comment(1, "Warning: Documentation prefix!");
+        mf->mf_comment(mi->mi_in, "Warning: Documentation prefix!");
     if (rat_lib_6addr_is_multicast(&pi->pi_prefix.pfx_addr))
-        mf->mf_comment(1, "Warning: Multicast prefix!");
+        mf->mf_comment(mi->mi_in, "Warning: Multicast prefix!");
     if (rat_lib_6addr_is_linklocal(&pi->pi_prefix.pfx_addr))
-        mf->mf_comment(1, "Warning: Link-local prefix!");
+        mf->mf_comment(mi->mi_in, "Warning: Link-local prefix!");
     if (rat_lib_6addr_is_unspecified(&pi->pi_prefix.pfx_addr))
-        mf->mf_comment(1, "Warning: Unspecified prefix!");
+        mf->mf_comment(mi->mi_in, "Warning: Unspecified prefix!");
     if (RAT_OPT_PI_PLEN_INVALID(&pi->pi_prefix))
-        mf->mf_comment(1, "Warning: Invalid prefix length!");
+        mf->mf_comment(mi->mi_in, "Warning: Invalid prefix length!");
     else if (!RAT_OPT_PI_PLEN_SLAAC(&pi->pi_prefix))
-        mf->mf_comment(1, "Warning: Prefix length not SLAAC-compatible!");
+        mf->mf_comment(mi->mi_in,
+                       "Warning: Prefix length not SLAAC-compatible!");
 
     return RAT_OK;
 }
@@ -243,10 +244,10 @@ static int rat_opt_pi_dump (struct rat_mod_functions *mf,
                            mi->mi_myname);
         } else {
             mf->mf_message("%s set valid-time %ud%uh%um%us", mi->mi_myname,
-                           RAT_MOD_S_D_TO_D(pi->pi_valid),
-                           RAT_MOD_S_D_TO_H(pi->pi_valid),
-                           RAT_MOD_S_D_TO_M(pi->pi_valid),
-                           RAT_MOD_S_D_TO_S(pi->pi_valid));
+                           RAT_LIB_S_D_TO_D(pi->pi_valid),
+                           RAT_LIB_S_D_TO_H(pi->pi_valid),
+                           RAT_LIB_S_D_TO_M(pi->pi_valid),
+                           RAT_LIB_S_D_TO_S(pi->pi_valid));
         }
     }
 
@@ -258,10 +259,10 @@ static int rat_opt_pi_dump (struct rat_mod_functions *mf,
                            mi->mi_myname);
         } else {
             mf->mf_message("%s set preferred-time %ud%uh%um%us", mi->mi_myname,
-                           RAT_MOD_S_D_TO_D(pi->pi_preferred),
-                           RAT_MOD_S_D_TO_H(pi->pi_preferred),
-                           RAT_MOD_S_D_TO_M(pi->pi_preferred),
-                           RAT_MOD_S_D_TO_S(pi->pi_preferred));
+                           RAT_LIB_S_D_TO_D(pi->pi_preferred),
+                           RAT_LIB_S_D_TO_H(pi->pi_preferred),
+                           RAT_LIB_S_D_TO_M(pi->pi_preferred),
+                           RAT_LIB_S_D_TO_S(pi->pi_preferred));
         }
     }
 
