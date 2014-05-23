@@ -75,7 +75,7 @@ Quick start
 First start the daemon (ratools/rad)
 
     # rad --loglevel info
-    ratools/rad 0.3.5 (May 2014)
+    ratools/rad v0.5 (May 2014)
     Log: Level set to `info'.
     Info: Netlink: Thread started.
     Info: Listener: Thread started.
@@ -164,11 +164,6 @@ Have at look at your ICMPv6 masterpiece using the CLI
 To save your work you can dump the configuration:
 
     $ ractl dump
-
-
-Please make sure to always use the latest version before reporting bugs. Thanks!
-
-    $ ractl version
     ra@dummy0 create
     ra@dummy0 enable
     mtu@dummy0 create
@@ -181,6 +176,11 @@ Please make sure to always use the latest version before reporting bugs. Thanks!
     rdnss0@dummy0 create
     rdnss0@dummy0 add server 2001:db8::53
     rdnss0@dummy0 enable
+
+
+Please make sure to always use the latest version before reporting bugs. Thanks!
+
+    $ ractl version
 
 
 Resources
