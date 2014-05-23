@@ -25,7 +25,6 @@
 #include "module.h"
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <netinet/icmp6.h>
 
 

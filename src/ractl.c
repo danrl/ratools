@@ -27,6 +27,7 @@
 #include "opt_sll.h"
 #include "opt_pi.h"
 #include "opt_rdnss.h"
+#include "opt_exp.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -483,6 +484,7 @@ int main (int argc, char *argv[])
     rat_opt_sll_init();
     rat_opt_pi_init();
     rat_opt_rdnss_init();
+    rat_opt_exp_init();
 
     if (isatty(fileno(stdin))) {
         /* tty */

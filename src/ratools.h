@@ -98,7 +98,7 @@ struct in6_pktinfo {
 /**
  * @brief Aligning space x to chunk size y
  */
-#define ALIGN(x,y)              ((((x) / (y)) + (((x) % (y) ? (y) : 0))) * (y))
+#define ALIGN(x,y)              ((((x) / (y)) * (y)) + ((x) % (y) ? (y) : 0))
 
 
 /** @brief A meta-macro to convert numbers to strings. i heard u like... */
@@ -355,7 +355,6 @@ struct rat_prefix {
  *      (RFC 4861 sec. 10.)
  */
 #define RAT_NDP_MSECDELAY_MAX   500
-
 
 
 /* --- control messages ----------------------------------------------------- */

@@ -136,17 +136,19 @@ int rat_mod_generic_set_val_uint8 (const char *argv, uint8_t *data,
     RAT_DEBUG_TRACE();
 
     if (!argv || !data || len < sizeof(uint8_t))
-        return RAT_ERROR;
+        goto exit_err;
 
     v = strtoull(argv, NULL, 10);
     if (v > UINT8_MAX) {
-        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range! " \
-                "Limited to `%" PRIu8 "'!\n", v, UINT8_MAX);
-        v = UINT8_MAX;
+        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range!", v);
+        goto exit_err;
     }
     *((uint8_t *) data) = (uint8_t) v;
 
     return RAT_OK;
+
+exit_err:
+    return RAT_ERROR;
 }
 
 
@@ -166,17 +168,19 @@ int rat_mod_generic_set_val_uint16 (const char *argv, uint8_t *data,
     RAT_DEBUG_TRACE();
 
     if (!argv || !data || len < sizeof(uint16_t))
-        return RAT_ERROR;
+        goto exit_err;
 
     v = strtoull(argv, NULL, 10);
     if (v > UINT16_MAX) {
-        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range! " \
-                "Limited to `%" PRIu16 "'!\n", v, UINT16_MAX);
-        v = UINT16_MAX;
+        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range!", v);
+        goto exit_err;
     }
     *((uint16_t *) data) = (uint16_t) v;
 
     return RAT_OK;
+
+exit_err:
+    return RAT_ERROR;
 }
 
 
@@ -196,17 +200,19 @@ int rat_mod_generic_set_val_uint32 (const char *argv, uint8_t *data,
     RAT_DEBUG_TRACE();
 
     if (!argv || !data || len < sizeof(uint32_t))
-        return RAT_ERROR;
+        goto exit_err;
 
     v = strtoull(argv, NULL, 10);
     if (v > UINT32_MAX) {
-        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range! " \
-                "Limited to `%" PRIu32 "'!\n", v, UINT32_MAX);
-        v = UINT32_MAX;
+        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range!", v);
+        goto exit_err;
     }
     *((uint32_t *) data) = (uint32_t) v;
 
     return RAT_OK;
+
+exit_err:
+    return RAT_ERROR;
 }
 
 
@@ -366,18 +372,20 @@ int rat_mod_generic_set_val_minsec16 (const char *argv, uint8_t *data,
     RAT_DEBUG_TRACE();
 
     if (!argv || !data || len < sizeof(uint16_t))
-        return RAT_ERROR;
+        goto exit_err;
 
     sscanf(argv, "%" PRIu64 "m%" PRIu64 "s", &m, &s);
     v = (m * 60) + s;
     if (v > UINT16_MAX) {
-        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range! " \
-                "Limited to `%" PRIu16 "'!\n", v, UINT16_MAX);
-        v = UINT16_MAX;
+        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range!", v);
+        goto exit_err;
     }
     *((uint16_t *) data) = (uint16_t) v;
 
     return RAT_OK;
+
+exit_err:
+    return RAT_ERROR;
 }
 
 /**
@@ -399,18 +407,20 @@ int rat_mod_generic_set_val_hminsec16 (const char *argv, uint8_t *data,
     RAT_DEBUG_TRACE();
 
     if (!argv || !data || len < sizeof(uint16_t))
-        return RAT_ERROR;
+        goto exit_err;
 
     sscanf(argv, "%" PRIu64 "h%" PRIu64 "m%" PRIu64 "s", &h, &m, &s);
     v = (h * 60 * 60) + (m * 60) + s;
     if (v > UINT16_MAX) {
-        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range! " \
-                "Limited to `%" PRIu16 "'!\n", v, UINT16_MAX);
-        v = UINT16_MAX;
+        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range!", v);
+        goto exit_err;
     }
     *((uint16_t *) data) = (uint16_t) v;
 
     return RAT_OK;
+
+exit_err:
+    return RAT_ERROR;
 }
 
 
@@ -434,19 +444,21 @@ int rat_mod_generic_set_val_hminsecms32 (const char *argv, uint8_t *data,
     RAT_DEBUG_TRACE();
 
     if (!argv || !data || len < sizeof(uint32_t))
-        return RAT_ERROR;
+        goto exit_err;
 
     sscanf(argv, "%" PRIu64 "h%" PRIu64 "m%" PRIu64 "s%" PRIu64 "ms",
            &h, &m, &s, &ms);
     v = (h * 60 * 60 * 1000) + (m * 60 * 1000) + (s * 1000) + ms;
     if (v > UINT32_MAX) {
-        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range! " \
-                "Limited to `%" PRIu32 "'!\n", v, UINT32_MAX);
-        v = UINT32_MAX;
+        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range!", v);
+        goto exit_err;
     }
     *((uint32_t *) data) = (uint32_t) v;
 
     return RAT_OK;
+
+exit_err:
+    return RAT_ERROR;
 }
 
 
@@ -470,19 +482,21 @@ int rat_mod_generic_set_val_dhminsec32 (const char *argv, uint8_t *data,
     RAT_DEBUG_TRACE();
 
     if (!argv || !data || len < sizeof(uint32_t))
-        return RAT_ERROR;
+        goto exit_err;
 
     sscanf(argv, "%" PRIu64 "d%" PRIu64 "h%" PRIu64 "m%" PRIu64 "s",
            &d, &h, &m, &s);
     v = (d * 24 * 60 * 60) + (h * 60 * 60) + (m * 60) + s;
     if (v > UINT32_MAX) {
-        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range! " \
-                "Limited to `%" PRIu32 "'!\n", v, UINT32_MAX);
-        v = UINT32_MAX;
+        fprintf(stderr, "Warning: Value `%" PRIu64 "' out of range!", v);
+        goto exit_err;
     }
     *((uint32_t *) data) = (uint32_t) v;
 
     return RAT_OK;
+
+exit_err:
+    return RAT_ERROR;
 }
 
 
