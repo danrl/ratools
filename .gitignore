@@ -1,10 +1,7 @@
-# Object files
 *.o
-
-# Executables
 *.out
 /bin/*
-
-# Documentation
 /doc/*
+/bash-completion.d/*
+
 
