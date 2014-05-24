@@ -92,7 +92,7 @@ struct rat_mod_instance {
     char                        mi_myname[RAT_MODNAMELEN +
                                           RAT_INDEXSTRLEN + 1 +
                                           RAT_IFNAMELEN + 1];
-    /** Output intendation hint */
+    /** Output indentation hint */
     uint8_t                     mi_in;
     /** Pointer to instance private data */
     void                        *mi_private;
@@ -114,7 +114,7 @@ struct rat_mod_instance {
 };
 
 
-/** Set output intendation hint */
+/** Set output indentation hint */
 #define RAT_MOD_MI_IN(mi, in)   (((struct rat_mod_instance *) mi)->mi_in = in)
 
 /** Macro to access the private data directly */

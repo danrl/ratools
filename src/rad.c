@@ -45,8 +45,9 @@
 #include <signal.h>             /* exit clean on SIGINT/SIGTERM */
 #include <sys/un.h>             /* struct sockaddr_un */
 #include <netinet/icmp6.h>
-#include <sys/stat.h>           /* chmod() */
+#include <sys/stat.h>           /* mkdir() */
 #include <getopt.h>
+#include <libgen.h>             /* dirname() */
 
 
 /* --- globals -------------------------------------------------------------- */
@@ -219,9 +220,9 @@ static int rat_rad_ctl_print_title (uint8_t in, const char *fmt, ...)
 
     in *= 2;
     if (in)
-		snprintf(cry.cry_msg, RAT_CTL_REPLY_MSG_LEN, "%*s%s\n", in, " ", tmp);
-	else
-		snprintf(cry.cry_msg, RAT_CTL_REPLY_MSG_LEN, "%s\n", tmp);
+        snprintf(cry.cry_msg, RAT_CTL_REPLY_MSG_LEN, "%*s%s\n", in, " ", tmp);
+    else
+        snprintf(cry.cry_msg, RAT_CTL_REPLY_MSG_LEN, "%s\n", tmp);
 
     return __rat_rad_ctl_send_reply(&cry);
 }
@@ -479,7 +480,7 @@ static void *rat_rad_thread_dummy (void *ptr)
  * @brief Add additional data to instance information
  *
  * We are leaking some additional data to the module instances to help modules
- * making decissions about reasonable behaviour and values.
+ * making decissions about reasonable behavior and values.
  *
  * @param db                    database entry
  * @param mi                    instance data buffer
@@ -2241,7 +2242,7 @@ int main (int argc, char *argv[])
                 } else if (strcmp(optarg, "error") == 0) {
                     rat_log_set_level(RAT_LOG_ERROR);
                 } else {
-                    fprintf(stderr, "Error: Unknown log level `%s'!\n", optarg);
+                    rat_log_err("Unknown log level `%s'!", optarg);
                     goto exit_err;
                 }
                 break;
@@ -2292,8 +2293,7 @@ int main (int argc, char *argv[])
 
     /* find RA core module id in registry */
     if (rat_mod_parse_module(RAT_RAMODNAME, &rat_rad_ra_mid) != RAT_OK) {
-        fprintf(stderr, "Error: Could not find core module `%s'!\n",
-                RAT_RAMODNAME);
+        rat_log_err("Could not find core module `" RAT_RAMODNAME "'!");
         goto exit_err;
     }
 
@@ -2328,12 +2328,16 @@ int main (int argc, char *argv[])
 
     /* --- socket for ratools/rad configuration ----------------------------- */
 
-    /* be aggressive on socket (temporary solution) */
-    unlink(srvsa.sun_path);
 
     /* open control socket */
+    if (mkdir(dirname(sockaddr), S_IRWXU | S_IRWXG | S_IRWXO) &&
+        errno != EEXIST) {
+        rat_log_err("Could not create socket path `%s': %s!",
+                    sockaddr, strerror(errno));
+        goto exit_err_rsra_sd;
+    }
     if ((rat_rad_ctlsrv_sd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-        rat_log_err("Could not open socket `%s': %s!\n",
+        rat_log_err("Could not open socket `%s': %s!",
                     srvsa.sun_path, strerror(errno));
         goto exit_err_rsra_sd;
     }
@@ -2341,19 +2345,15 @@ int main (int argc, char *argv[])
     /* bind socket */
     slen = sizeof(srvsa.sun_family) + strlen(srvsa.sun_path);
     if (bind(rat_rad_ctlsrv_sd, (struct sockaddr *) &srvsa, slen) < 0) {
-        rat_log_err("Could not bind to socket `%s': %s!\n",
+        rat_log_err("Could not bind to socket `%s': %s!",
                     srvsa.sun_path, strerror(errno));
         goto exit_err_ctlsrv_sd;
     }
 
-    /* be aggressive on socket (temporary solution) */
-    chmod(srvsa.sun_path, S_IRUSR | S_IWUSR | S_IXUSR | \
-                          S_IRGRP | S_IWGRP | S_IXGRP | \
-                          S_IROTH | S_IWOTH | S_IXOTH);
 
     /* listen on socket */
     if (listen(rat_rad_ctlsrv_sd, 5) < 0) {
-        rat_log_err("Could not listen on socket `%s': %s!\n",
+        rat_log_err("Could not listen on socket `%s': %s!",
                     srvsa.sun_path, strerror(errno));
         goto exit_err_ctlsrv_sd;
     }
@@ -2377,7 +2377,7 @@ int main (int argc, char *argv[])
         memset(&crq, 0x0, sizeof(crq));
         slen = recv(rat_rad_ctlcli_sd, &crq, sizeof(crq), 0);
         if (slen != sizeof(crq)) {
-            rat_log_err("Received malformed control request!\n");
+            rat_log_err("Received malformed control request!");
             close(rat_rad_ctlcli_sd);
             continue;
         }
@@ -2423,6 +2423,9 @@ int main (int argc, char *argv[])
 
     /* close control socket */
     close(rat_rad_ctlsrv_sd);
+    if (unlink(srvsa.sun_path))
+        rat_log_err("Could not unlink `%s': %s!", srvsa.sun_path,
+                    strerror(errno));
 
     /* tell helper threads to shut down */
     pthread_kill(nl_thread, SIGINT);
@@ -2437,18 +2440,14 @@ int main (int argc, char *argv[])
     /* close RS listening and RA sending socket */
     close(rat_rad_rsra_sd);
 
-    /* take a nap to give stdio time to flush */
-    sleep(2);
     fprintf(stdout, "Life tasted so good!\n");
-
     return EXIT_SUCCESS;
 
 exit_err_ctlsrv_sd:
     close(rat_rad_ctlsrv_sd);
-    if (sockaddr && *sockaddr)
-        unlink(sockaddr);
-    else
-        unlink(RAT_SOCKADDR);
+    if (unlink(srvsa.sun_path))
+        rat_log_err("Could not unlink `%s': %s!", srvsa.sun_path,
+                    strerror(errno));
 exit_err_rsra_sd:
     close(rat_rad_rsra_sd);
 exit_err:
