@@ -1,5 +1,5 @@
 # Be more verbose
-log info
+loglevel info
 # Router Advertisement `ra@dummy0'
 ra@dummy0 create
 ra@dummy0 enable
