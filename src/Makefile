@@ -1,6 +1,6 @@
 # project config
 CC           = gcc
-CFLAGS      += -std=gnu99 -pedantic -Wall -Wextra -pthread
+CFLAGS      += -O2 -std=gnu99 -pedantic -Wall -Wextra -pthread
 CDEFS       += -DLEVEL1_DCACHE_LINESIZE=`getconf LEVEL1_DCACHE_LINESIZE`
 # debug is slow but helpful during development
 #CDEFS       += -DRAT_DEBUG
@@ -15,8 +15,7 @@ BASHDIR      = ../bash-completion.d
 .DEFAULT:   all
 
 
-all:                     \
-	clean            \
+all:                 \
 	rad              \
 	ractl            \
 	racomplete-ractl \
@@ -27,12 +26,7 @@ all:                     \
 	$(CC) $(CFLAGS) $(CDEFS) -c $<
 
 
-instdir:
-	mkdir -p "$(BASHDIR)" "$(BINDIR)"
-
-
-ractl:                   \
-	instdir          \
+ractl:               \
 	library.o        \
 	log.o            \
 	module.o         \
@@ -43,11 +37,11 @@ ractl:                   \
 	opt_rdnss.o      \
 	opt_exp.o        \
 	ractl.o
+	mkdir -p "$(BINDIR)"
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-rad:                     \
-	instdir          \
+rad:                 \
 	library.o        \
 	log.o            \
 	database.o       \
@@ -63,12 +57,11 @@ rad:                     \
 	opt_rdnss.o      \
 	opt_exp.o        \
 	rad.o
-	[ -d "$(BINDIR)" ] || mkdir "$(BINDIR)"
+	mkdir -p "$(BINDIR)"
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-racomplete-ractl:        \
-	instdir          \
+racomplete-ractl:    \
 	library.o        \
 	log.o            \
 	module.o         \
@@ -79,11 +72,13 @@ racomplete-ractl:        \
 	opt_rdnss.o      \
 	opt_exp.o        \
 	racomplete-ractl.o
+	mkdir -p "$(BINDIR)"
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-bash-completion:         \
+bash-completion:     \
 	racomplete-ractl
+	mkdir -p "$(BASHDIR)"
 	$(BINDIR)/racomplete-ractl > $(BASHDIR)/ractl.sh
 
 
