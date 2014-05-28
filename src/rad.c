@@ -732,6 +732,7 @@ static void *rat_rad_listener (void *ptr)
     char dstname[INET6_ADDRSTRLEN];
     /* payload buffer */
     uint8_t buf[RAT_NDP_MAXPACKETLEN];
+    struct nd_router_solicit *ndrs;
     /* others */
     struct rat_db *db = NULL;
     useconds_t delay;
@@ -811,7 +812,8 @@ static void *rat_rad_listener (void *ptr)
             db = rat_db_release(db);                               /* RELEASE */
 
         /* wait for data or thread signal */
-        if (pselect(rat_rad_rsra_sd + 1, &rfds, NULL, NULL, NULL, &emptyset) == -1 &&
+        if (pselect(rat_rad_rsra_sd + 1, &rfds,
+                    NULL, NULL, NULL, &emptyset) == -1 &&
             errno == EINTR)
             goto exit;
 
@@ -821,7 +823,8 @@ static void *rat_rad_listener (void *ptr)
             goto exit;
 
         /* check type */
-        if (((struct nd_router_solicit *) buf)->nd_rs_type != ND_ROUTER_SOLICIT)
+        ndrs = (struct nd_router_solicit *) buf;
+        if (ndrs->nd_rs_type != ND_ROUTER_SOLICIT)
             continue;
 
         /* extract and prepare ancillary data */
