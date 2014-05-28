@@ -105,7 +105,7 @@ exit_err:
 static int rat_ractl_normalize (char *line)
 {
     char *s, *p;
-    int ws;
+    int ws = 0;
     RAT_DEBUG_TRACE();
 
     if (*line == '#')
