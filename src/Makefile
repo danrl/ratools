@@ -15,11 +15,9 @@ BASHDIR      = ../bash-completion.d
 .DEFAULT:   all
 
 
-all:                     \
-	clean            \
-	rad              \
-	ractl            \
-	racomplete-ractl \
+all:                         \
+	rad                  \
+	ractl                \
 	bash-completion
 
 
@@ -27,65 +25,62 @@ all:                     \
 	$(CC) $(CFLAGS) $(CDEFS) -c $<
 
 
-instdir:
-	mkdir -p "$(BASHDIR)" "$(BINDIR)"
-
-
-ractl:                   \
-	instdir          \
-	library.o        \
-	log.o            \
-	module.o         \
-	ra.o             \
-	opt_mtu.o        \
-	opt_sll.o        \
-	opt_pi.o         \
-	opt_rdnss.o      \
-	opt_exp.o        \
+ractl:                       \
+	library.o            \
+	log.o                \
+	module.o             \
+	ra.o                 \
+	opt_mtu.o            \
+	opt_sll.o            \
+	opt_pi.o             \
+	opt_rdnss.o          \
+	opt_exp.o            \
 	ractl.o
+	mkdir -p "$(BASHDIR)" "$(BINDIR)"
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-rad:                     \
-	instdir          \
-	library.o        \
-	log.o            \
-	database.o       \
-	module.o         \
-	multicast.o      \
-	netlink.o        \
-	proc.o           \
-	packetset.o      \
-	ra.o             \
-	opt_mtu.o        \
-	opt_sll.o        \
-	opt_pi.o         \
-	opt_rdnss.o      \
-	opt_exp.o        \
+rad:                         \
+	library.o            \
+	log.o                \
+	database.o           \
+	module.o             \
+	multicast.o          \
+	netlink.o            \
+	proc.o               \
+	packetset.o          \
+	ra.o                 \
+	opt_mtu.o            \
+	opt_sll.o            \
+	opt_pi.o             \
+	opt_rdnss.o          \
+	opt_exp.o            \
 	rad.o
-	[ -d "$(BINDIR)" ] || mkdir "$(BINDIR)"
+	mkdir -p "$(BASHDIR)" "$(BINDIR)"
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-racomplete-ractl:        \
-	instdir          \
-	library.o        \
-	log.o            \
-	module.o         \
-	ra.o             \
-	opt_mtu.o        \
-	opt_sll.o        \
-	opt_pi.o         \
-	opt_rdnss.o      \
-	opt_exp.o        \
+racomplete-ractl:            \
+	library.o            \
+	log.o                \
+	module.o             \
+	ra.o                 \
+	opt_mtu.o            \
+	opt_sll.o            \
+	opt_pi.o             \
+	opt_rdnss.o          \
+	opt_exp.o            \
 	racomplete-ractl.o
+	mkdir -p "$(BASHDIR)" "$(BINDIR)"
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-bash-completion:         \
+bash-completion:             \
 	racomplete-ractl
 	$(BINDIR)/racomplete-ractl > $(BASHDIR)/ractl.sh
 
 
 clean:
-	rm -rf *.o "$(BASHDIR)" "$(BINDIR)"
+	rm -rf	*.o          \
+		"$(BASHDIR)" \
+		"$(BINDIR)"
