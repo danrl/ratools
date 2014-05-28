@@ -205,6 +205,7 @@ static int rat_ractl_parse_send (int argc, char *argv[])
     /* special action: version information */
     if (rat_ractl_rm(RAT_RACTL_REGEX_VERSION, argv[0]) == RAT_OK) {
         fprintf(stdout, "ratools/ractl " RAT_VERSION " (" RAT_DATE ")\n");
+        fprintf(stdout, "Written by Dan Luedtke <mail@danrl.de>\n");
         return EXIT_SUCCESS;
     }
 

@@ -2213,6 +2213,7 @@ int main (int argc, char *argv[])
 
     /* version information */
     fprintf(stdout, "ratools/rad " RAT_VERSION " (" RAT_DATE ")\n");
+    fprintf(stdout, "Written by Dan Luedtke <mail@danrl.de>\n");
 
 
     /* --- set defaults and get options ------------------------------------- */
