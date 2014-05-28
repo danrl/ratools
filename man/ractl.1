@@ -1,6 +1,10 @@
 .TH RACTL 1
 .SH NAME
-ractl \- a client to manipulate the configuration of rad
+ractl \- Router Advertisement Control (ratools/ractl)
+.SH SYNOPSIS
+.B ractl
+[\fB\-s|--socket\fR \fIUNIXSOCKET\fR]
+.IR command ...
 .SH DESCRIPTION
 The basic idea is to have two programs. On the one hand a powerful CLI, called ratools/ractl, for manipulating the configuration. And on the other hand an efficient, non-bloated stable daemon process, called ratools/rad. Both programs communicate with each other via an UNIX socket.
 .SH OPTIONS
