@@ -370,7 +370,7 @@ static void *__rat_ps_send (void *ptr)
     cmsghdr->cmsg_level = IPPROTO_IPV6;
     cmsghdr->cmsg_type = IPV6_HOPLIMIT;
     cmsghdr->cmsg_len = CMSG_LEN(sizeof(int));
-    *((int *) CMSG_DATA(cmsghdr)) = RAT_PS_HOPLIMIT;
+    *CMSG_DATA(cmsghdr) = RAT_PS_HOPLIMIT;
     /* control message: packet info */
     cmsghdr = CMSG_NXTHDR(&msghdr, cmsghdr);
     cmsghdr->cmsg_level = IPPROTO_IPV6;
