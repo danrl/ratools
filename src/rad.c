@@ -1515,52 +1515,51 @@ exit_err:
 static int rat_rad_ra_dump (struct rat_db *db)
 {
     int ret;
-    struct rat_mod_instance mi;
+    struct rat_mod_instance mi, rami;
     struct rat_db_opt *opt;
     RAT_DEBUG_TRACE();
-
-    rat_rad_fill_mi_ra(db, &mi);
 
     if (db->db_state == RAT_DB_STATE_DESTROYED) {
         ret = RAT_OK;
         goto exit_ret;
     }
 
-    rat_rad_mf.mf_message("# Router Advertisement `%s'", mi.mi_myname);
-    rat_rad_mf.mf_message("%s create", mi.mi_myname);
+    rat_rad_fill_mi_ra(db, &rami);
+    rat_rad_mf.mf_message("### Router Advertisement `%s'", rami.mi_myname);
+    rat_rad_mf.mf_message("%s create", rami.mi_myname);
 
     if (db->db_maxadvint != RAT_DB_MAXADVINT_DEF)
         rat_rad_mf.mf_message("%s set maximum-interval %uh%um%us",
-                              mi.mi_myname,
+                              rami.mi_myname,
                               RAT_LIB_S_H_TO_H(db->db_maxadvint),
                               RAT_LIB_S_H_TO_M(db->db_maxadvint),
                               RAT_LIB_S_H_TO_S(db->db_maxadvint));
 
     if (db->db_minadvint != RAT_DB_MINADVINT_DEF)
         rat_rad_mf.mf_message("%s set minimum-interval %uh%um%us",
-                              mi.mi_myname,
+                              rami.mi_myname,
                               RAT_LIB_S_H_TO_H(db->db_minadvint),
                               RAT_LIB_S_H_TO_M(db->db_minadvint),
                               RAT_LIB_S_H_TO_S(db->db_minadvint));
 
-    ret = rat_mod_rad_call_aid(&rat_rad_mf, &mi, rat_rad_ra_mid,
+    ret = rat_mod_rad_call_aid(&rat_rad_mf, &rami, rat_rad_ra_mid,
                                RAT_MOD_AID_DUMP);
+
+    /* dump options */
+    for (opt = db->db_opt; opt; opt = opt->opt_next) {
+        rat_rad_fill_mi_opt(db, opt, &mi);
+        rat_mod_rad_call_aid(&rat_rad_mf, &mi, opt->opt_mid, RAT_MOD_AID_DUMP);
+    }
 
     switch (db->db_state) {
         case RAT_DB_STATE_FADEIN1:
         case RAT_DB_STATE_FADEIN2:
         case RAT_DB_STATE_FADEIN3:
         case RAT_DB_STATE_ENABLED:
-            rat_rad_mf.mf_message("%s enable", mi.mi_myname);
+            rat_rad_mf.mf_message("%s enable", rami.mi_myname);
             break;
         default:
             break;
-    }
-
-    /* dump options */
-    for (opt = db->db_opt; opt; opt = opt->opt_next) {
-        rat_rad_fill_mi_opt(db, opt, &mi);
-        rat_mod_rad_call_aid(&rat_rad_mf, &mi, opt->opt_mid, RAT_MOD_AID_DUMP);
     }
 
 exit_ret:
