@@ -33,8 +33,9 @@
 #include <stdarg.h>             /* va_start() and friends */
 
 
-
+/** printf() short-hand */
 static int (*pf) (const char *, ...) = printf;
+
 
 /**
  * @brief Printf with newline wrapper
@@ -58,8 +59,7 @@ static void pn (const char *fmt, ...)
 /**
  * @brief Print actions
  *
- * @param fmt                   format string
- * @param ...                   variadic arguments
+ * @param mmr                   module configuration
  */
 static void pf_actions (struct rat_mod_modreg *mmr)
 {
@@ -95,6 +95,7 @@ exit:
 /**
  * @brief Match on parameters and their values
  *
+ * @param sad                   string of triggered action (e.g. "set")
  * @param msr                   set/add/del registration
  * @param len                   length of registration
  */

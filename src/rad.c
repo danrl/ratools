@@ -195,7 +195,7 @@ static int rat_rad_ctl_print_error (const char *fmt, ...)
  * Turns a formatted string into a reply message and sends it to the current
  * control client for printing. The message contains an option title.
  *
- * @param indent                indentation level
+ * @param in                    indentation level
  * @param fmt                   format string
  * @param ...                   variable number of arguments
  *
