@@ -16,3 +16,5 @@
 
 * Check ALL THE pointers for their _required_ mutability. Many of them are
   too permissive. Add const keyword when possible.
+
+* Write file CODING_STYLE where we explain the ratools coding guidelines
