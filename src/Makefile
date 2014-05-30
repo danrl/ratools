@@ -1,31 +1,53 @@
-# project config
+#
+# ratools tabstop: 4
+#
+
+
+# --- project config --------------------------------------------------------- #
+
+
 CC           = gcc
-CFLAGS       = -O2 -std=gnu99 -pedantic -Wall -Wextra -pthread $(shell echo $$CFLAGS)
+
+CFLAGS       = -O2 -std=gnu99 -pedantic -Wall -Wextra -pthread
+CFLAGS      += $(shell echo $$CFLAGS)
+
 CDEFS       += -DLEVEL1_DCACHE_LINESIZE=$(shell getconf LEVEL1_DCACHE_LINESIZE)
 # debug is slow but helpful during development
 #CDEFS      += -DRAT_DEBUG
 # tracing is slow and spams the logs. use with care!
 #CDEFS      += -DRAT_DEBUG_TRACING
+
 LDFLAGS      = $(shell echo $$LDFLAGS)
+
 BINDIR       = ../bin
 BASHDIR      = ../bash-completion.d
 
-# generic build instructions
-.PHONY:     all clean
-.DEFAULT:   all
+
+# --- build configuration ---------------------------------------------------- #
 
 
-all:                     \
+.PHONY:      all clean
+.DEFAULT:    all
+
+
+all:                 \
 	rad              \
 	ractl            \
 	bash-completion
+
+
+clean:
+	rm -rf *.o "$(BASHDIR)" "$(BINDIR)"
 
 
 %.o:	%.c %.h ratools.h
 	$(CC) $(CFLAGS) $(CDEFS) -c $<
 
 
-ractl:                   \
+# --- targets ---------------------------------------------------------------- #
+
+
+ractl:               \
 	library.o        \
 	log.o            \
 	module.o         \
@@ -40,7 +62,7 @@ ractl:                   \
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-rad:                     \
+rad:                 \
 	library.o        \
 	log.o            \
 	database.o       \
@@ -60,7 +82,7 @@ rad:                     \
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-racomplete-ractl:        \
+racomplete-ractl:    \
 	library.o        \
 	log.o            \
 	module.o         \
@@ -75,11 +97,7 @@ racomplete-ractl:        \
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-bash-completion:         \
+bash-completion:     \
 	racomplete-ractl
 	mkdir -p "$(BASHDIR)"
 	$(BINDIR)/racomplete-ractl > $(BASHDIR)/ractl.sh
-
-
-clean:
-	rm -rf *.o "$(BASHDIR)" "$(BINDIR)"
