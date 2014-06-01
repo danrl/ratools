@@ -1,3 +1,5 @@
+* manpage for ratools/rad and ratools/racomplete-ractl
+
 * Implement this:
 
         Note that system management may disable a router's IP forwarding
