@@ -127,7 +127,7 @@ struct in6_pktinfo {
  * For communication between ratools/ractl and ratools/rad. Can be overwritten
  * by environment variable RAT_SOCKET_ADDRESS.
  */
-#define RAT_SOCKADDR            "/var/lib/ratools/rad.sock"
+#define RAT_SOCKADDR            "/var/run/ratools/rad.sock"
 
 /** RA core module name */
 #define RAT_RAMODNAME           "ra"
