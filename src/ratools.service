@@ -1,0 +1,14 @@
+[Unit]
+Description=Daemon for IPv6 Router Advertisements
+After=syslog.target
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/rad
+Restart=on-failure
+StandardInput=socket
+StandardOutput=syslog
+StandardError=syslog
+
+[Install]
+WantedBy=basic.target
