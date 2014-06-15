@@ -1,5 +1,7 @@
 [Unit]
 Description=Socket for IPv6 Router Advertisement Daemon
+Documentation=man:ractl(8)
+Conflicts=ratools-rad.service
 
 [Socket]
 ListenStream=/var/run/ratools/rad.sock
