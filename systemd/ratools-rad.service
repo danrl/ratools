@@ -1,14 +1,16 @@
 [Unit]
 Description=Daemon for IPv6 Router Advertisements
+Documentation=man:ractl(8)
 After=syslog.target
 After=network.target
 
 [Service]
 ExecStart=/usr/bin/rad
 Restart=on-failure
-StandardInput=socket
 StandardOutput=syslog
 StandardError=syslog
+Sockets=ratools-rad.socket
 
 [Install]
+Also=ratools-rad.socket
 WantedBy=basic.target
