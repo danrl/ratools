@@ -6,19 +6,30 @@ ractl \- Router Advertisement Control (ratools/ractl)
 [\fB\-s|--socket\fR \fIUNIXSOCKET\fR]
 .IR command ...
 .SH DESCRIPTION
-The basic idea is to have two programs. On the one hand a powerful CLI, called ratools/ractl, for manipulating the configuration. And on the other hand an efficient, non-bloated stable daemon process, called ratools/rad. Both programs communicate with each other via an UNIX socket.
+Control program for ratools/rad providing an easy to use command line interface.
 .SH OPTIONS
-.TP
+.TP 8
+.BR --socket
+Override default path of the control socket.
+.SH BUILT-IN COMMANDS
+.TP 8
 .BR dump
 Print configuration of all Router Advertisements to stdout.
-.TP
+.TP 8
 .BR show
 Show all Router Advertisements.
-.TP
+.TP 8
 .BR version
 Show version information for ratools/ractl.
-.TP
+.TP 8
 .BR loglevel
-Set log level of ratools/rad. Possible values are 'info', 'warning', and 'error'.
+Set log level of ratools/rad. Possible values are 'info', 'warning', and
+'error'.
+.SH MODULE COMMANDS
+There are more commands provided by modules. To learn more about them, have a
+look at the module's manual pages.
+.SH AVAILABILITY
+.B ractl
+is part of the ratools framework available from https://github.com/danrl/ratools
 .SH AUTHOR
 Written by Dan Luedtke.
