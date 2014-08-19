@@ -109,6 +109,6 @@ install-debian:         \
 	ractl           \
 	rad             \
 	bash-completion
-	cp $(BINDIR)/rad        /usr/sbin/
-	cp $(BINDIR)/ractl      /usr/bin/
-	cp $(BASHDIR)/ractl.sh  /etc/bash_completion.d/
+	install -p $(BINDIR)/rad        /usr/sbin/
+	install -p $(BINDIR)/ractl      /usr/bin/
+	install -p $(BASHDIR)/ractl.sh  /etc/bash_completion.d/
