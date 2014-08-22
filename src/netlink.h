@@ -36,8 +36,17 @@
 struct rat_nl_rtreq {
     /** netlink message header */
     struct nlmsghdr             req_nlmsg;
-    /** actual rtnetlink message */
-    struct rtgenmsg             req_rtgen;
+    /** actual netlink message */
+    union {
+        /** link-layer information */
+        struct ifinfomsg        req_un_ifi;
+        /** network-layer information */
+        struct ifaddrmsg        req_un_ifa;
+    } req_un;
+    /** link-layer information */
+#   define req_ifi              req_un.req_un_ifi
+    /** network-layer information */
+#   define req_ifa              req_un.req_un_ifa
 };
 
 

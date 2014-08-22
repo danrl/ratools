@@ -315,12 +315,13 @@ int rat_nl_init_db (struct rat_db *db)
 
     /* LINK LAYER: craft request */
     memset(&req, 0x0, sizeof(req));
-    req.req_nlmsg.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtgenmsg));
+    req.req_nlmsg.nlmsg_len = NLMSG_LENGTH(sizeof(req.req_un));
     req.req_nlmsg.nlmsg_type = RTM_GETLINK;
-    req.req_nlmsg.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
+    req.req_nlmsg.nlmsg_flags = NLM_F_REQUEST;
     req.req_nlmsg.nlmsg_seq = ++seq;
     req.req_nlmsg.nlmsg_pid = la.nl_pid;
-    req.req_rtgen.rtgen_family = AF_INET6;
+    req.req_ifi.ifi_family = AF_INET6;
+    req.req_ifi.ifi_index = (int) RAT_DB_IFINDEX(db);
 
     /* LINK LAYER: iovec */
     memset(&iov, 0x0, sizeof(iov));
@@ -335,10 +336,6 @@ int rat_nl_init_db (struct rat_db *db)
     msg.msg_iovlen = 1; /* number of iovec blocks */
 
     /* LINK LAYER: send netlink message */
-    sendmsg(sd, (struct msghdr *) &msg, 0);
-
-    req.req_nlmsg.nlmsg_type = RTM_GETADDR;
-    req.req_nlmsg.nlmsg_seq = ++seq;
     sendmsg(sd, (struct msghdr *) &msg, 0);
 
     /* LINK LAYER: re-using old iov and msg for receiving */
@@ -405,12 +402,13 @@ int rat_nl_init_db (struct rat_db *db)
 
     /* NETWORK LAYER: craft request */
     memset(&req, 0x0, sizeof(req));
-    req.req_nlmsg.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtgenmsg));
+    req.req_nlmsg.nlmsg_len = NLMSG_LENGTH(sizeof(req.req_un));
     req.req_nlmsg.nlmsg_type = RTM_GETADDR;
     req.req_nlmsg.nlmsg_seq = ++seq;
     req.req_nlmsg.nlmsg_pid = la.nl_pid;
-    req.req_nlmsg.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
-    req.req_rtgen.rtgen_family = AF_INET6;
+    req.req_nlmsg.nlmsg_flags = NLM_F_REQUEST;
+    req.req_ifa.ifa_family = AF_INET6;
+    req.req_ifa.ifa_index = (int) RAT_DB_IFINDEX(db);
 
     /* NETWORK LAYER: iovec */
     memset(&iov, 0x0, sizeof(iov));
