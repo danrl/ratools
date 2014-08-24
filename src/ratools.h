@@ -117,8 +117,8 @@ struct in6_pktinfo {
 
 /** static version information */
 /** @{ */
-#define RAT_VERSION             "v0.5.3"
-#define RAT_DATE                "June 2014"
+#define RAT_VERSION             "v0.5.4"
+#define RAT_DATE                "August 2014"
 /** @} */
 
 /**
