@@ -30,7 +30,7 @@ BASHDIR      = ../bash-completion.d
 .DEFAULT:    all
 
 
-all:                 \
+all:                     \
 	rad              \
 	ractl            \
 	bash-completion
@@ -44,10 +44,10 @@ clean:
 	$(CC) $(CFLAGS) $(CDEFS) -c $<
 
 
-# --- targets ---------------------------------------------------------------- #
+# --- build targets ---------------------------------------------------------- #
 
 
-ractl:               \
+ractl:                   \
 	library.o        \
 	log.o            \
 	module.o         \
@@ -62,7 +62,7 @@ ractl:               \
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-rad:                 \
+rad:                     \
 	library.o        \
 	log.o            \
 	database.o       \
@@ -82,7 +82,7 @@ rad:                 \
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-racomplete-ractl:    \
+racomplete-ractl:        \
 	library.o        \
 	log.o            \
 	module.o         \
@@ -97,7 +97,18 @@ racomplete-ractl:    \
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-bash-completion:     \
+bash-completion:        \
 	racomplete-ractl
 	mkdir -p "$(BASHDIR)"
 	$(BINDIR)/racomplete-ractl > $(BASHDIR)/ractl.sh
+
+
+# --- install targets ------------------------------------------------------- #
+
+install-debian:         \
+	ractl           \
+	rad             \
+	bash-completion
+	install -p $(BINDIR)/rad        /usr/sbin/
+	install -p $(BINDIR)/ractl      /usr/bin/
+	install -p $(BASHDIR)/ractl.sh  /etc/bash_completion.d/

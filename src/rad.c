@@ -2385,6 +2385,19 @@ int main (int argc, char *argv[])
             continue;
         }
 
+        RAT_DEBUG_MESSAGE("Received control message: " \
+                          "type=`%d', " \
+                          "mid=`%" PRIu16 "', " \
+                          "oid=`%" PRIu16 "', " \
+                          "aid=`%" PRIu16 "', " \
+                          "pid=`%" PRIu16 "', " \
+                          "vid=`%" PRIu16 "', " \
+                          "ifindex=`%" PRIu32 "', " \
+                          "data=`%p'",
+                          crq.crq_type, crq.crq_mid, crq.crq_oid,
+                          crq.crq_aid, crq.crq_pid, crq.crq_vid,
+                          crq.crq_ifindex, crq.crq_data);
+
         switch (crq.crq_type) {
             case RAT_CTL_REQUEST_TYPE_SHOWALL:
                 ret = rat_rad_ra_showall();
