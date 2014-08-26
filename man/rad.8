@@ -1,11 +1,10 @@
-.TH RAD 8 "June 2014" "ratools"
+.TH RAD 8 "September 2014" "ratools"
 .SH NAME
 rad \- Router Advertisement Daemon (ratools/rad)
 .SH SYNOPSIS
 .B rad
 [\fB\-s|--socket\fR \fIUNIXSOCKET\fR]
-[\fB\-l|--loglevel\fR \fILOGGING LEVEL\fR]
-.IR command ...
+[\fB\-l|--loglevel\fR \fILOGLEVEL\fR]
 .SH DESCRIPTION
 rad is a fast, dynamic, multi-threading daemon for sending IPv6 Router
 Advertisements (RA). It is controlled via ractl.
@@ -15,8 +14,8 @@ Advertisements (RA). It is controlled via ractl.
 Override default path of the control socket.
 .TP 8
 .BR --loglevel
-Set logging level. Possible values are 'info', 'warning', and
-'error'.
+Set logging level. Possible values are \fIinfo\fR, \fIwarning\fR, and
+\fIerror\fR.
 .SH AVAILABILITY
 .B rad
 is part of the ratools framework available from https://github.com/danrl/ratools
