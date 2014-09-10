@@ -107,7 +107,7 @@ Nice routers come with recursive DNS server addresses as well:
     # rdnss0@dummy0 add server 2001:db8::53
     # rdnss0@dummy0 enable
 
-Let's enable the little fella:
+Let's enable our little fella:
 
     # ra@dummy0 enable
 
@@ -183,8 +183,8 @@ Best pratice is to save the configuration to a file:
 
     # ractl dump > example.conf
 
-If you want to restore the configuration at a latr time, just pipe it into
-rattols/ractl:
+If you want to restore the configuration at a later time, just pipe it into
+ratools/ractl:
 
     # ractl < example.conf
 
