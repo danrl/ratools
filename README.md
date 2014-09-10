@@ -90,7 +90,7 @@ How about advertising the link MTU?
     # mtu@dummy0 create
     # mtu@dummy0 enable
 
-It is also nice to let clients know the link-local address.
+It is also nice to let clients know the source link-layer address.
 
     # sll@dummy0 create
     # sll@dummy0 enable
