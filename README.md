@@ -61,7 +61,7 @@ Although ratools is complex from the inside, the code looks very POSIX-ish from
 the outside. Thus, bulding is relatively easy. Clone the repository and type
 `make`. It is as simple as that!
 
-    $ git clone git@github.com:danrl/ratools.git
+    $ git clone https://github.com/danrl/ratools.git
     Cloning into 'ratools'...
     [...]
     $ cd ratools/src/
