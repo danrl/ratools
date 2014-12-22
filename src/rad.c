@@ -325,14 +325,15 @@ static int rat_rad_ctl_print_info (const char *fmt, ...)
 
     memset(&cry, 0x0, sizeof(cry));
     cry.cry_type = RAT_CTL_REPLY_TYPE_PRINT;
-    va_start(arglist, fmt);
-    vsnprintf(tmp, RAT_CTL_REPLY_MSG_LEN, fmt, arglist);
-    va_end(arglist);
-
-    if (fmt)
+    if (fmt) {
+		va_start(arglist, fmt);
+		vsnprintf(tmp, RAT_CTL_REPLY_MSG_LEN, fmt, arglist);
+		va_end(arglist);
         snprintf(cry.cry_msg, RAT_CTL_REPLY_MSG_LEN, "(%s)\n", tmp);
-    else
-        snprintf(cry.cry_msg, RAT_CTL_REPLY_MSG_LEN, "\n");
+	}
+	else {
+		snprintf(cry.cry_msg, RAT_CTL_REPLY_MSG_LEN, "\n");
+	}
 
     return __rat_rad_ctl_send_reply(&cry);
 }
@@ -1379,7 +1380,7 @@ static int rat_rad_ra_show (struct rat_db *db)
     rat_rad_mf.mf_info("%s", db->db_ifup ? "Up" : "Down");
     if (!db->db_ifup)
         rat_rad_mf.mf_comment(0, "Warning: " \
-                                 "This prevents ratools/rad from working!");
+                                 "This prevents ratools/rad from sending!");
 
     rat_rad_mf.mf_param(0, "Interface MTU");
     rat_rad_mf.mf_value("%" PRIu32, db->db_mtu);
@@ -1404,7 +1405,7 @@ static int rat_rad_ra_show (struct rat_db *db)
         case RAT_PRC_FWD_DISABLED:
             rat_rad_mf.mf_info("Disabled");
             rat_rad_mf.mf_comment(0, "Warning: " \
-                                  "This prevents ratools/rad from sending!");
+                                  "This system will not forward packets!");
             break;
         case RAT_PRC_FWD_ENABLED:
             rat_rad_mf.mf_info("Enabled");
@@ -1638,15 +1639,15 @@ static int rat_rad_ra_enable (struct rat_db *db)
         goto exit_err;
     }
 
-    /* read forwarding state */
-    if (rat_prc_forwarding(db) != RAT_OK) {
-        rat_rad_mf.mf_error("Could not read procfs!");
-        goto exit_err;
-    }
-    if (!db->db_forwarding) {
-        rat_rad_mf.mf_error("Forwarding seems to be disabled in procfs!");
-        goto exit_err;
-    }
+    //~ /* read forwarding state */
+    //~ if (rat_prc_forwarding(db) != RAT_OK) {
+        //~ rat_rad_mf.mf_error("Could not read procfs!");
+        //~ goto exit_err;
+    //~ }
+    //~ if (!db->db_forwarding) {
+        //~ rat_rad_mf.mf_error("Forwarding seems to be disabled in procfs!");
+        //~ goto exit_err;
+    //~ }
 
     db->db_state = RAT_DB_STATE_FADEIN1;
 
