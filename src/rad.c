@@ -1639,16 +1639,6 @@ static int rat_rad_ra_enable (struct rat_db *db)
         goto exit_err;
     }
 
-    //~ /* read forwarding state */
-    //~ if (rat_prc_forwarding(db) != RAT_OK) {
-        //~ rat_rad_mf.mf_error("Could not read procfs!");
-        //~ goto exit_err;
-    //~ }
-    //~ if (!db->db_forwarding) {
-        //~ rat_rad_mf.mf_error("Forwarding seems to be disabled in procfs!");
-        //~ goto exit_err;
-    //~ }
-
     db->db_state = RAT_DB_STATE_FADEIN1;
 
     /* create worker thread for unsolicited RAs */
