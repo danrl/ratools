@@ -381,7 +381,7 @@ int rat_lib_prefix_to_str (char *buf, size_t buflen, struct rat_prefix *pfx)
         goto exit_err;
 
     snprintf(tmp, sizeof(tmp), "/%" PRIu8, pfx->pfx_len);
-    strncat(buf, tmp, sizeof(tmp));
+    strncat(buf, tmp, buflen - strlen(buf) - 1);
     return RAT_OK;
 
 exit_err:
