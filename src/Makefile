@@ -112,3 +112,6 @@ install-debian:         \
 	install -p $(BINDIR)/rad        /usr/sbin/
 	install -p $(BINDIR)/ractl      /usr/bin/
 	install -p $(BASHDIR)/ractl.sh  /etc/bash_completion.d/
+	# TODO install man pages
+	# eventually, this whole target will be deletec and we will have a
+	# nice debian package...
