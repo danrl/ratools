@@ -2407,13 +2407,13 @@ int main (int argc, char *argv[])
         rat_log_err("Could not unlink `%s': %s!", srvsa.sun_path,
                     strerror(errno));
 
-    /* tell helper threads to shut down */
+    /* shutdown helper threads */
     pthread_kill(nl_thread, SIGINT);
     pthread_kill(rs_thread, SIGINT);
-
-    /* disable all RAs and shutdown worker threads */
     pthread_join(nl_thread, NULL);
     pthread_join(rs_thread, NULL);
+
+    /* disable all RAs */
     rat_rad_ra_disable_all();
     rat_rad_ra_join_workers();
 

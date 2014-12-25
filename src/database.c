@@ -58,7 +58,7 @@ static int rat_db_debug_lockcount = 0;
 #define RAT_DB_WRITELOCK()                                                  \
     do {                                                                    \
         RAT_DEBUG_MESSAGE("Writelock: before=%d", rat_db_debug_lockcount);  \
-        pthread_rwlock_rdlock(&rat_db_lock);                                \
+        pthread_rwlock_wrlock(&rat_db_lock);                                \
         RAT_DEBUG_MESSAGE("Writelock: after=%d", ++rat_db_debug_lockcount); \
     } while (0)
 #define RAT_DB_UNLOCK()                                                     \
