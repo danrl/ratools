@@ -33,9 +33,8 @@
 /* --- globals -------------------------------------------------------------- */
 
 
-/** database as array of linked lists */
-static struct rat_db *rat_db_fxstab[RAT_DB_FXSTS] \
-    __attribute__((aligned(RAT_DB_FXSTALIGN))) = { NULL };
+/** database as linked lists */
+static struct rat_db *rat_db_list = NULL;
 
 /** global database read/write lock */
 static pthread_rwlock_t rat_db_lock = PTHREAD_RWLOCK_INITIALIZER;
@@ -93,7 +92,7 @@ static struct rat_db *rat_db_find (uint32_t ifindex)
     struct rat_db *db;
     RAT_DEBUG_TRACE();
 
-    for (db = rat_db_fxstab[ifindex % RAT_DB_FXSTS]; db; db = db->db_next)
+    for (db = rat_db_list; db; db = db->db_next)
         if (db->db_ifindex == ifindex)
             return db;
 
@@ -131,13 +130,12 @@ int rat_db_create (uint32_t ifindex)
         goto exit_err_unlock_free;
 
     /* add item to database */
-    if (!rat_db_fxstab[ifindex % RAT_DB_FXSTS]) {
+    if (!rat_db_list) {
         /* list is empty */
-        rat_db_fxstab[ifindex % RAT_DB_FXSTS] = db;
+        rat_db_list = db;
     } else {
         /* list is not empty, append */
-        for (cur = rat_db_fxstab[ifindex % RAT_DB_FXSTS]; cur->db_next;
-             cur = cur->db_next);
+        for (cur = rat_db_list; cur->db_next; cur = cur->db_next);
         cur->db_next = db;
     }
 
@@ -172,12 +170,12 @@ int rat_db_destroy (uint32_t ifindex)
         goto exit_err_unlock;
 
     /* remove interface from database */
-    if (rat_db_fxstab[ifindex % RAT_DB_FXSTS] == db) {
+    if (rat_db_list == db) {
         /* interface is first element in list */
-        rat_db_fxstab[ifindex % RAT_DB_FXSTS] = db->db_next;
+        rat_db_list = db->db_next;
     } else {
         /* interface is not the first element in list */
-        pre = rat_db_fxstab[ifindex % RAT_DB_FXSTS];
+        pre = rat_db_list;
         for (cur = pre->db_next; cur; cur = cur->db_next) {
             if (cur == db) {
                 pre->db_next = cur->db_next;
@@ -269,18 +267,12 @@ exit_err:
 struct rat_db *rat_db_grab_first (void)
 {
     struct rat_db *db = NULL;
-    unsigned int i;
     RAT_DEBUG_TRACE();
 
     RAT_DB_READLOCK();                                             /* LOCK DB */
 
     /* first entry in database requested */
-    for (i = 0; i < RAT_DB_FXSTS; i++) {
-        if (rat_db_fxstab[i]) {
-            db = rat_db_fxstab[i];
-            break;
-        }
-    }
+    db = rat_db_list;
     if (!db)
         goto exit_err_unlock;
 
@@ -313,7 +305,6 @@ exit_err_unlock:
 struct rat_db *rat_db_grab_next (struct rat_db *db)
 {
     struct rat_db *next = NULL;
-    unsigned int i;
     RAT_DEBUG_TRACE();
 
     if (!db)
@@ -321,13 +312,6 @@ struct rat_db *rat_db_grab_next (struct rat_db *db)
 
     if (db->db_next) {
         next = rat_db_grab(db->db_next->db_ifindex);
-    } else {
-        for (i = (db->db_ifindex % RAT_DB_FXSTS) + 1; i < RAT_DB_FXSTS; i++) {
-            if (rat_db_fxstab[i]) {
-                next = rat_db_fxstab[i];
-                break;
-            }
-        }
     }
     db = rat_db_release(db);
 

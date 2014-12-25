@@ -11,7 +11,6 @@ CC           = gcc
 CFLAGS       = -O2 -std=gnu99 -pedantic -Wall -Wextra -pthread
 CFLAGS      += $(shell echo $$CFLAGS)
 
-CDEFS       += -DLEVEL1_DCACHE_LINESIZE=$(shell getconf LEVEL1_DCACHE_LINESIZE)
 # debug is slow but helpful during development
 CDEFS      += -DRAT_DEBUG
 # tracing is slow and spams the logs. use with care!
@@ -30,7 +29,7 @@ BASHDIR      = ../bash-completion.d
 .DEFAULT:    all
 
 
-all:                     \
+all:                 \
 	rad              \
 	ractl            \
 	bash-completion
@@ -47,7 +46,7 @@ clean:
 # --- build targets ---------------------------------------------------------- #
 
 
-ractl:                   \
+ractl:               \
 	library.o        \
 	log.o            \
 	module.o         \
@@ -62,7 +61,7 @@ ractl:                   \
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-rad:                     \
+rad:                 \
 	library.o        \
 	log.o            \
 	database.o       \
@@ -96,7 +95,7 @@ racomplete-ractl:        \
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
 
 
-bash-completion:        \
+bash-completion:     \
 	racomplete-ractl
 	mkdir -p "$(BASHDIR)"
 	$(BINDIR)/racomplete-ractl > $(BASHDIR)/ractl.sh
@@ -104,7 +103,7 @@ bash-completion:        \
 
 # --- install targets ------------------------------------------------------- #
 
-install-debian:         \
+install-debian:     \
 	ractl           \
 	rad             \
 	bash-completion

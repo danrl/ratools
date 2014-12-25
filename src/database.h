@@ -31,26 +31,6 @@
 #include <unistd.h>             /* useconds_t */
 
 
-/* --- fast access table ---------------------------------------------------- */
-
-
-/** CPU level 1 cache line size defaults to 64 if none or small specified */
-/** @{ */
-#ifndef LEVEL1_DCACHE_LINESIZE
-#define LEVEL1_DCACHE_LINESIZE  64
-#endif
-#if LEVEL1_DCACHE_LINESIZE < 8
-#define LEVEL1_DCACHE_LINESIZE  64
-#endif
-/** @} */
-
-/** Fast access table size */
-#define RAT_DB_FXSTS            (LEVEL1_DCACHE_LINESIZE / sizeof(void *))
-
-/** Fast access table memory alignment requirement */
-#define RAT_DB_FXSTALIGN        LEVEL1_DCACHE_LINESIZE
-
-
 /* --- types ---------------------------------------------------------------- */
 
 
