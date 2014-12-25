@@ -75,7 +75,7 @@ Quick start
 First start the daemon (ratools/rad)
 
     # rad --loglevel info
-    ratools/rad v0.5.4 (December 2014)
+    ratools/rad v0.5.5 (December 2014)
     Written by Dan Luedtke <mail@danrl.de>
     Log: Level set to `info'.
     Info: Netlink: Thread started.
