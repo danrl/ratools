@@ -26,7 +26,6 @@
 #include "module.h"
 #include "netlink.h"
 #include "multicast.h"
-#include "proc.h"
 #include "packetset.h"
 #include "ra.h"
 #include "opt_mtu.h"
@@ -1250,10 +1249,6 @@ static int rat_rad_ra_create (uint32_t ifindex)
         rat_rad_mf.mf_error("Could not initialize! Interface down?");
         goto exit_err_destroy;
     }
-    if (rat_prc_forwarding(db) != RAT_OK) {
-        rat_rad_mf.mf_error("Could not read procfs!");
-        goto exit_err_destroy;
-    }
 
     /* module */
     if (rat_rad_fill_mi_ra(db, &mi) != RAT_OK) {
@@ -1398,28 +1393,6 @@ static int rat_rad_ra_show (struct rat_db *db)
     rat_lib_6addr_to_str(buffer, sizeof(buffer), &db->db_lladdr);
     rat_rad_mf.mf_value("%s", buffer);
     rat_rad_mf.mf_info(NULL);
-
-    rat_rad_mf.mf_param(0, "Forwarding");
-    rat_rad_mf.mf_value("%d", db->db_forwarding);
-    switch (db->db_forwarding) {
-        case RAT_PRC_FWD_DISABLED:
-            rat_rad_mf.mf_info("Disabled");
-            rat_rad_mf.mf_comment(0, "Warning: " \
-                                  "This system will not forward packets!");
-            break;
-        case RAT_PRC_FWD_ENABLED:
-            rat_rad_mf.mf_info("Enabled");
-            break;
-        case RAT_PRC_FWD_ENABLEDRS:
-            rat_rad_mf.mf_info("Enabled");
-            rat_rad_mf.mf_comment(0, "Warning: " \
-                                  "Interface is also listening to RA!");
-            break;
-        default:
-            rat_rad_mf.mf_info("Unknown");
-            rat_rad_mf.mf_comment(0, "Warning: Assuming forwarding enabled!");
-            break;
-    }
 
     rat_rad_mf.mf_param(0, "Maximum Interval");
     rat_rad_mf.mf_value("%" PRIu16, db->db_maxadvint);
