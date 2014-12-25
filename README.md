@@ -75,7 +75,7 @@ Quick start
 First start the daemon (ratools/rad)
 
     # rad --loglevel info
-    ratools/rad v0.5.2 (May 2014)
+    ratools/rad v0.5.4 (December 2014)
     Written by Dan Luedtke <mail@danrl.de>
     Log: Level set to `info'.
     Info: Netlink: Thread started.
@@ -124,7 +124,6 @@ Have at look at your ICMPv6 masterpiece using the CLI
       Interface MTU:          1500
       Hardware Address:       1a:39:b3:80:f4:cc
       Link-local Address:     fe80::1839:b3ff:fe80:f4cc
-      Forwarding:             1               (Enabled)
       Maximum Interval:       600             (0d 0h 10m 0s)
       Minimum Interval:       198             (0d 0h 3m 18s)
       Solicited/Unsolicited:  1/0
