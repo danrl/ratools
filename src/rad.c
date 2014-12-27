@@ -88,7 +88,7 @@ static int rat_db_debug_lockcount = 0;
 #define RAT_DB_READLOCK()                                                   \
     do {                                                                    \
         RAT_DEBUG_MESSAGE("Readlock: before=%d", rat_db_debug_lockcount);   \
-        pthread_rwlock_wrlock(&rat_db_lock);                                \
+        pthread_rwlock_rdlock(&rat_db_lock);                                \
         RAT_DEBUG_MESSAGE("Readlock: after=%d", ++rat_db_debug_lockcount);  \
     } while (0)
 #define RAT_DB_WRITELOCK()                                                  \
@@ -246,7 +246,7 @@ struct rat_db_opt *rat_db_add_opt (struct rat_db *db, uint16_t mid,
 
     if (db->db_opt) {
         for (cur = db->db_opt; cur->opt_next; cur = cur->opt_next);
-        cur->opt_next = opt;
+            cur->opt_next = opt;
     } else {
         db->db_opt = opt;
     }
@@ -973,9 +973,8 @@ exit:
  */
 static int __rat_rad_ctl_send_reply (struct rat_ctl_reply *cry)
 {
-    RAT_DEBUG_TRACE();
-
-    if (send(rat_rad_ctlcli_sd, cry, sizeof(*cry), 0) == sizeof(*cry))
+    if (send(rat_rad_ctlcli_sd, cry, sizeof(*cry),
+             MSG_NOSIGNAL) == sizeof(*cry))
         return RAT_OK;
 
     return RAT_ERROR;
@@ -999,7 +998,6 @@ static int rat_rad_ctl_print_message (const char *fmt, ...)
 {
     struct rat_ctl_reply cry;
     va_list arglist;
-    RAT_DEBUG_TRACE();
 
     memset(&cry, 0x0, sizeof(cry));
     cry.cry_type = RAT_CTL_REPLY_TYPE_MSG;
@@ -1028,7 +1026,6 @@ static int rat_rad_ctl_print_error (const char *fmt, ...)
 {
     struct rat_ctl_reply cry;
     va_list arglist;
-    RAT_DEBUG_TRACE();
 
     memset(&cry, 0x0, sizeof(cry));
     cry.cry_type = RAT_CTL_REPLY_TYPE_ERRMSG;
@@ -1061,7 +1058,6 @@ static int rat_rad_ctl_print_title (uint8_t in, const char *fmt, ...)
     char tmp[RAT_CTL_REPLY_MSG_LEN + 1];
     struct rat_ctl_reply cry;
     va_list arglist;
-    RAT_DEBUG_TRACE();
 
     memset(&cry, 0x0, sizeof(cry));
     cry.cry_type = RAT_CTL_REPLY_TYPE_PRINT;
@@ -1100,7 +1096,6 @@ static int rat_rad_ctl_print_param (uint8_t indent, const char *fmt, ...)
     char tmp[RAT_CTL_REPLY_MSG_LEN + 1];
     struct rat_ctl_reply cry;
     va_list arglist;
-    RAT_DEBUG_TRACE();
 
     memset(&cry, 0x0, sizeof(cry));
     cry.cry_type = RAT_CTL_REPLY_TYPE_PRINT;
@@ -1137,7 +1132,6 @@ static int rat_rad_ctl_print_value (const char *fmt, ...)
     char tmp[RAT_CTL_REPLY_MSG_LEN + 1];
     struct rat_ctl_reply cry;
     va_list arglist;
-    RAT_DEBUG_TRACE();
 
     memset(&cry, 0x0, sizeof(cry));
     cry.cry_type = RAT_CTL_REPLY_TYPE_PRINT;
@@ -1172,7 +1166,6 @@ static int rat_rad_ctl_print_info (const char *fmt, ...)
     char tmp[RAT_CTL_REPLY_MSG_LEN + 1];
     struct rat_ctl_reply cry;
     va_list arglist;
-    RAT_DEBUG_TRACE();
 
     memset(&cry, 0x0, sizeof(cry));
     cry.cry_type = RAT_CTL_REPLY_TYPE_PRINT;
@@ -1212,7 +1205,6 @@ static int rat_rad_ctl_print_comment (uint8_t indent, const char *fmt, ...)
     char tmp[RAT_CTL_REPLY_MSG_LEN + 1];
     struct rat_ctl_reply cry;
     va_list arglist;
-    RAT_DEBUG_TRACE();
 
     memset(&cry, 0x0, sizeof(cry));
     cry.cry_type = RAT_CTL_REPLY_TYPE_PRINT;

@@ -215,7 +215,7 @@ static int rat_opt_pi_show (struct rat_mod_functions *mf,
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
  */
 static int rat_opt_pi_dump (struct rat_mod_functions *mf,
-                             struct rat_mod_instance *mi)
+                            struct rat_mod_instance *mi)
 {
     struct rat_opt_pi_private *pi = RAT_MOD_PRIVATE(mi);
     char buffer[RAT_PREFIX_STRSIZ];
