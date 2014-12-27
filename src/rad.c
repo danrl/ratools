@@ -22,9 +22,7 @@
 
 #include "library.h"
 #include "log.h"
-#include "database.h"
 #include "module.h"
-#include "netlink.h"
 #include "multicast.h"
 #include "packetset.h"
 #include "ra.h"
@@ -43,13 +41,17 @@
 #include <unistd.h>             /* close */
 #include <signal.h>             /* exit clean on SIGINT/SIGTERM */
 #include <sys/un.h>             /* struct sockaddr_un */
-#include <netinet/icmp6.h>
-#include <sys/stat.h>           /* mkdir() */
 #include <getopt.h>
 #include <libgen.h>             /* dirname() */
+#include <signal.h>
+#include <pthread.h>
+#include <netinet/icmp6.h>
+#include <net/if.h>             /* if_indextoname() */
+#include <sys/stat.h>           /* mkdir() */
+#include <sys/socket.h>
 
 
-/* --- globals -------------------------------------------------------------- */
+/* --- rad globals ---------------------------------------------------------- */
 
 
 /** RS listening and RA sending socket */
@@ -63,6 +65,856 @@ static int rat_rad_ctlsrv_sd = 0;
 
 /** Control socket for accepted client */
 static int rat_rad_ctlcli_sd = 0;
+
+
+/* --- database globals ----------------------------------------------------- */
+
+
+/** database as linked lists */
+static struct rat_db *rat_db_list = NULL;
+
+/** global database read/write lock */
+static pthread_rwlock_t rat_db_lock = PTHREAD_RWLOCK_INITIALIZER;
+
+
+#ifdef RAT_DEBUG
+/** Global lock count for debugging purposes. */
+static int rat_db_debug_lockcount = 0;
+#endif /* RAT_DEBUG */
+
+
+/** Centralized locking and unlocking */
+/** @{ */
+#define RAT_DB_READLOCK()                                                   \
+    do {                                                                    \
+        RAT_DEBUG_MESSAGE("Readlock: before=%d", rat_db_debug_lockcount);   \
+        pthread_rwlock_wrlock(&rat_db_lock);                                \
+        RAT_DEBUG_MESSAGE("Readlock: after=%d", ++rat_db_debug_lockcount);  \
+    } while (0)
+#define RAT_DB_WRITELOCK()                                                  \
+    do {                                                                    \
+        RAT_DEBUG_MESSAGE("Writelock: before=%d", rat_db_debug_lockcount);  \
+        pthread_rwlock_wrlock(&rat_db_lock);                                \
+        RAT_DEBUG_MESSAGE("Writelock: after=%d", ++rat_db_debug_lockcount); \
+    } while (0)
+#define RAT_DB_UNLOCK()                                                     \
+    do {                                                                    \
+        RAT_DEBUG_MESSAGE("Unlock: before=%d", rat_db_debug_lockcount);     \
+        pthread_rwlock_rdlock(&rat_db_lock);                                \
+        RAT_DEBUG_MESSAGE("Unlock: after=%d", --rat_db_debug_lockcount);    \
+    } while (0)
+/** @} */
+
+
+/** Increase serial and updated timestamp */
+#define RAT_DB_UPDATE(db)                                                   \
+    do {                                                                    \
+        db->db_version++;                                                   \
+        db->db_updated = time(NULL);                                        \
+    } while (0)
+
+
+/* --- database functions --------------------------------------------------- */
+
+
+/**
+ * @brief Find database element by index number without
+ *
+ * @param ifindex               interface index number
+ *
+ * @return Returns database entry, NULL on error
+ *
+ *         /'\
+ *        /   \      Caution!
+ *       /  |  \     --------
+ *      /   o   \    Caller must hold AT LEAST a READ LOCK on rat_db_lock!
+ *     '_________'
+ */
+static struct rat_db *rat_db_find (uint32_t ifindex)
+{
+    struct rat_db *db;
+    RAT_DEBUG_TRACE();
+
+    for (db = rat_db_list; db; db = db->db_next)
+        if (db->db_ifindex == ifindex)
+            return db;
+
+    return NULL;
+}
+
+
+/**
+ * @brief Reset database entry state to fade-in
+ *
+ * @param db                    database entry
+ *
+ *         /'\
+ *        /   \      Caution!
+ *       /  |  \     --------
+ *      /   o   \    Caller must hold WRITE LOCK on rat_db_lock!
+ *     '_________'
+ */
+static inline void rat_db_refadein (struct rat_db *db)
+{
+    switch (db->db_state) {
+        case RAT_DB_STATE_FADEIN2:
+        case RAT_DB_STATE_FADEIN3:
+        case RAT_DB_STATE_ENABLED:
+            db->db_state = RAT_DB_STATE_FADEIN1;
+            break;
+        default:
+            break;
+    }
+
+    return;
+}
+
+
+/**
+ * @brief Get an option from a database entry
+ *
+ * @param db                    database entry
+ * @param mid                   module id of requested option
+ * @param oid                   option index of requested option
+ *
+ * @return Returns option, NULL on error
+ *
+ *         /'\
+ *        /   \      Caution!
+ *       /  |  \     --------
+ *      /   o   \    Caller must hold AT LEAST a READ LOCK on rat_db_lock!
+ *     '_________'
+ */
+struct rat_db_opt *rat_db_get_opt (struct rat_db *db, uint16_t mid,
+                                   uint16_t oid)
+{
+    struct rat_db_opt *opt;
+    RAT_DEBUG_TRACE();
+
+    if (!db)
+        goto exit_err;
+
+    for (opt = db->db_opt; opt; opt = opt->opt_next)
+        if (opt->opt_mid == mid && opt->opt_oid == oid)
+            return opt;
+
+exit_err:
+    return NULL;
+}
+
+
+/**
+ * @brief Add an option to a database entry
+ *
+ * @param db                    database entry
+ * @param mid                   module id of requested option
+ * @param oid                   option index of requested option
+ *
+ * @return Returns new option, NULL on error
+ *
+ *         /'\
+ *        /   \      Caution!
+ *       /  |  \     --------
+ *      /   o   \    Caller must hold WRITE LOCK on rat_db_lock!
+ *     '_________'
+ */
+struct rat_db_opt *rat_db_add_opt (struct rat_db *db, uint16_t mid,
+                                   uint16_t oid)
+{
+    struct rat_db_opt *opt, *cur;
+    RAT_DEBUG_TRACE();
+
+    if (!db)
+        goto exit_err;
+
+    /* check for existence */
+    opt = rat_db_get_opt(db, mid, oid);
+    if (opt)
+        goto exit_err;
+
+    opt = calloc(1, sizeof(*opt));
+    if (!opt)
+        goto exit_err;
+
+    /* initialze option data */
+    opt->opt_next = NULL;
+    opt->opt_mid = mid;
+    opt->opt_oid = oid;
+    opt->opt_private = NULL;
+    opt->opt_rawdata = NULL;
+    opt->opt_rawlen = 0;
+
+    if (db->db_opt) {
+        for (cur = db->db_opt; cur->opt_next; cur = cur->opt_next);
+        cur->opt_next = opt;
+    } else {
+        db->db_opt = opt;
+    }
+
+    return opt;
+
+exit_err:
+    return NULL;
+}
+
+
+/**
+ * @brief Delete an option from a database entry
+ *
+ * @param db                    database entry
+ * @param mid                   module id of requested option
+ * @param oid                   option index of requested option
+ *
+ * @return Returns RAT_ERROR on error, RAT_OK otherwise
+ *
+ *         /'\
+ *        /   \      Caution!
+ *       /  |  \     --------
+ *      /   o   \    Caller must hold WRITE LOCK on rat_db_lock!
+ *     '_________'
+ */
+int rat_db_del_opt (struct rat_db *db, uint16_t mid, uint16_t oid)
+{
+    struct rat_db_opt *opt, *cur;
+    RAT_DEBUG_TRACE();
+
+    if (!db)
+        goto exit_err;
+
+    /* get option */
+    opt = rat_db_get_opt(db, mid, oid);
+    if (!opt)
+        goto exit_err;
+
+    /* remove from list */
+    if (db->db_opt == opt) {
+        db->db_opt = opt->opt_next;
+    } else {
+        for (cur = db->db_opt; cur; cur = cur->opt_next) {
+            if (cur->opt_next == opt) {
+                cur->opt_next = opt->opt_next;
+                break;
+            }
+        }
+    }
+
+    /* free option */
+    if (opt->opt_private)
+        free(opt->opt_private);
+    if (opt->opt_rawdata)
+        free(opt->opt_rawdata);
+    free(opt);
+
+    return RAT_OK;
+
+exit_err:
+    return RAT_ERROR;
+}
+
+
+/* --- netlink functions ---------------------------------------------------- */
+
+
+/**
+ * @brief Parse rtnetlink attributes of RTM_*LINK message
+ *
+ * Updates database if a value has changed.
+ *
+ * @param db                    database entry
+ * @param nh                    netlink message header
+ *
+ *         /'\
+ *        /   \      Caution!
+ *       /  |  \     --------
+ *      /   o   \    Caller must hold WRITE LOCK on rat_db_lock!
+ *     '_________'
+ */
+static void __rat_nl_parse_link_rtattr (struct rat_db *db, struct nlmsghdr *nh)
+{
+    struct ifinfomsg *ifi = (struct ifinfomsg *) NLMSG_DATA(nh);
+    unsigned int rtlen, mtu;
+    int ifup;
+    struct rtattr *rtattr;
+    struct rat_hwaddr hwa;
+    char hwaddrstr[RAT_HWADDR_STRSIZ];
+    RAT_DEBUG_TRACE();
+
+    /* interface up/down state */
+    ifup = (ifi->ifi_flags & IFF_UP) && (ifi->ifi_flags & IFF_RUNNING);
+    if (db->db_ifup != ifup) {
+
+        /* update interface up/down state */
+        db->db_ifup = ifup;
+        RAT_DB_UPDATE(db);
+
+        /* signal worker if interface went down */
+        if (!ifup)
+            pthread_cond_signal(&db->db_worker_cond);
+
+        /* log */
+        rat_log_nfo("Netlink: Interface %" PRIu32 ": New state `%s'.",
+                    db->db_ifindex, ifup ? "up" : "down");
+    }
+
+    rtlen = nh->nlmsg_len - NLMSG_LENGTH(sizeof(*ifi));
+    for (rtattr = IFLA_RTA(ifi); RTA_OK(rtattr, rtlen);
+         rtattr = RTA_NEXT(rtattr, rtlen)) {
+        switch (rtattr->rta_type) {
+
+            case IFLA_IFNAME:
+                /* interface name */
+                if (strncmp(db->db_ifname, RTA_DATA(rtattr),
+                            sizeof(db->db_ifname)) == 0)
+                    break;
+
+                /* update interface name */
+                strncpy(db->db_ifname, RTA_DATA(rtattr),
+                        sizeof(db->db_ifname) - 1);
+                RAT_DB_UPDATE(db);
+
+                /* log */
+                rat_log_nfo("Netlink: Interface %" PRIu32 ": New name `%s'.",
+                            db->db_ifindex, RTA_DATA(rtattr));
+                break;
+
+            case IFLA_MTU:
+                /* MTU */
+                mtu =  (uint32_t) (*((unsigned int *) RTA_DATA(rtattr)));
+                if (db->db_mtu == mtu)
+                    break;
+
+                /* update mtu */
+                db->db_mtu = mtu;
+                RAT_DB_UPDATE(db);
+
+                /* re-fadein to propagate changes */
+                rat_db_refadein(db);
+                RAT_DB_UPDATE(db);
+
+                /* poke worker thread */
+                pthread_cond_signal(&db->db_worker_cond);
+
+                /* log */
+                rat_log_nfo("Netlink: Interface %" PRIu32 ": New MTU `%u'.",
+                            db->db_ifindex, mtu);
+                break;
+
+            case IFLA_ADDRESS:
+                /* hardware address */
+                memset(&hwa, 0x0, sizeof(hwa));
+                hwa.hwa_len = (uint8_t) MIN(RTA_PAYLOAD(rtattr),
+                                            sizeof(hwa.hwa_addr));
+                memcpy(hwa.hwa_addr, RTA_DATA(rtattr), hwa.hwa_len);
+                if (memcmp(&db->db_hwaddr, &hwa, sizeof(db->db_hwaddr)) == 0)
+                    break;
+
+                /* update hardware address */
+                memcpy(&db->db_hwaddr, &hwa, sizeof(db->db_hwaddr));
+                RAT_DB_UPDATE(db);
+
+                /* re-fadein to propagate changes */
+                rat_db_refadein(db);
+                RAT_DB_UPDATE(db);
+
+                /* poke worker thread */
+                pthread_cond_signal(&db->db_worker_cond);
+
+                /* log */
+                rat_lib_hwaddr_to_str(hwaddrstr, sizeof(hwaddrstr), &hwa);
+                rat_log_nfo("Netlink: Interface %" PRIu32 ": " \
+                            "New hardware address `%s'.",
+                            db->db_ifindex, hwaddrstr);
+                break;
+
+            default:
+                RAT_DEBUG_MESSAGE("Unhandled IFLA %d", rtattr->rta_type);
+                break;
+            }
+    }
+
+    return;
+}
+
+
+/**
+ * @brief Parse rtnetlink RTM_*LINK message
+ *
+ * Updates database if a value has changed.
+ *
+ * @param nh                    netlink message header
+ */
+static void __rat_nl_parse_link (struct nlmsghdr *nh)
+{
+    struct ifinfomsg *ifi = (struct ifinfomsg *) NLMSG_DATA(nh);
+    struct rat_db *db;
+    RAT_DEBUG_TRACE();
+
+    if (ifi->ifi_index < 1) {
+        rat_log_err("Netlink: Ignoring out of bound interface index!");
+        goto exit;
+    }
+
+    RAT_DB_WRITELOCK();                                               /* LOCK */
+    db = rat_db_find(ifi->ifi_index);
+    if (db)
+        __rat_nl_parse_link_rtattr(db, nh);
+    else
+        rat_log_nfo("Netlink: Interface %" PRIu32 ": Ignored.", ifi->ifi_index);
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
+
+exit:
+    return;
+}
+
+
+/**
+ * @brief Parse rtnetlink attributes of RTM_*ADDR message
+ *
+ * Updates database entry if a value has changed.
+ *
+ * @param db                    database entry
+ * @param nh                    netlink message header
+ *
+ *         /'\
+ *        /   \      Caution!
+ *       /  |  \     --------
+ *      /   o   \    Caller must hold WRITE LOCK on rat_db_lock!
+ *     '_________'
+ */
+static void __rat_nl_parse_addr_rtattr (struct rat_db *db, struct nlmsghdr *nh)
+{
+    struct ifaddrmsg *ifa = (struct ifaddrmsg *) NLMSG_DATA(nh);
+    unsigned int rtlen;
+    struct rtattr *rtattr;
+    char addrstr[RAT_6ADDR_STRSIZ];
+    RAT_DEBUG_TRACE();
+
+    rtlen = IFA_PAYLOAD(nh);
+    for (rtattr = IFA_RTA(ifa); RTA_OK(rtattr, rtlen);
+         rtattr = RTA_NEXT(rtattr, rtlen)) {
+        switch (rtattr->rta_type) {
+            /*
+             * if_addr.h:
+             * IFA_ADDRESS is prefix address, rather than local interface
+             * address. It makes no difference for normally configured
+             * broadcast interfaces, but for point-to-point IFA_ADDRESS is
+             * DESTINATION address, local address is supplied in IFA_LOCAL
+             * attribute.
+             */
+            case IFA_ADDRESS:
+            case IFA_LOCAL:
+                /* link-local address */
+                if (!rat_lib_6addr_is_linklocal(RTA_DATA(rtattr)))
+                    break;
+                if (memcmp(&db->db_lladdr, RTA_DATA(rtattr),
+                           sizeof(db->db_lladdr)) == 0)
+                    break;
+
+                /* update link-local address */
+                memcpy(&db->db_lladdr, RTA_DATA(rtattr), sizeof(db->db_lladdr));
+                RAT_DB_UPDATE(db);
+
+                /* re-fadein to propagate changes */
+                rat_db_refadein(db);
+                RAT_DB_UPDATE(db);
+
+                /* poke worker thread */
+                pthread_cond_signal(&db->db_worker_cond);
+
+                /* log */
+                rat_lib_6addr_to_str(addrstr, sizeof(addrstr),
+                                     RTA_DATA(rtattr));
+                rat_log_nfo("Netlink: Interface %" PRIu32 ": " \
+                            "New link-local address `%s'.",
+                            db->db_ifindex, addrstr);
+                break;
+
+            default:
+                RAT_DEBUG_MESSAGE("Unhandled IFA %d", rtattr->rta_type);
+                break;
+            }
+    }
+
+    return;
+}
+
+
+/**
+ * @brief Initialiy fetch interface data
+ *
+ * The purpose of this function is to fetch interface state, MTU value, hardware
+ * address and link-local address of an interface. A netlink listener thread
+ * will update the initial information when they change over time.
+ *
+ * @param db                    database entry
+ *
+ * @return Returns RAT_ERROR on error, RAT_OK otherwise
+ *
+ *         /'\
+ *        /   \      Caution!
+ *       /  |  \     --------
+ *      /   o   \    Caller must hold WRITE LOCK on rat_db_lock!
+ *     '_________'
+ */
+int rat_nl_init_db (struct rat_db *db)
+{
+    RAT_DEBUG_TRACE();
+
+    int sd;
+    unsigned int len;
+    uint32_t seq = 0;
+    struct sockaddr_nl la, ka;
+    struct rat_nl_rtreq req;
+    struct msghdr msg;
+    struct iovec iov;
+    struct ifinfomsg *ifi;
+    struct ifaddrmsg *ifa;
+    struct nlmsghdr *nh;
+    char replybuf[RAT_NL_REPLYBUFSIZE];
+    RAT_DEBUG_TRACE();
+
+
+    /* local address */
+    memset(&la, 0x0, sizeof(la));
+    la.nl_family = AF_NETLINK;
+    la.nl_pid = getpid();
+    la.nl_groups = 0;
+
+    /* kernel address */
+    memset(&ka, 0x0, sizeof(ka));
+    ka.nl_family = AF_NETLINK;
+    ka.nl_pid = 0;
+
+    /* open netlink socket */
+    sd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+    if (sd < 0) {
+        rat_log_err("Netlink socket: %s", strerror(errno));
+        goto exit_err;
+    }
+
+    /* bind netlink socket */
+    if (bind(sd, (struct sockaddr *) &la, sizeof(la))) {
+        rat_log_err("Netlink bind: %s", strerror(errno));
+        goto exit_err_sd;
+    }
+
+    /* ---------------------------------------------------------------------- */
+
+    /* LINK LAYER: craft request */
+    memset(&req, 0x0, sizeof(req));
+    req.req_nlmsg.nlmsg_len = NLMSG_LENGTH(sizeof(req.req_un));
+    req.req_nlmsg.nlmsg_type = RTM_GETLINK;
+    req.req_nlmsg.nlmsg_flags = NLM_F_REQUEST;
+    req.req_nlmsg.nlmsg_seq = ++seq;
+    req.req_nlmsg.nlmsg_pid = la.nl_pid;
+    req.req_ifi.ifi_family = AF_INET6;
+    req.req_ifi.ifi_index = (int) db->db_ifindex;
+
+    /* LINK LAYER: iovec */
+    memset(&iov, 0x0, sizeof(iov));
+    iov.iov_base = &req;
+    iov.iov_len = req.req_nlmsg.nlmsg_len;
+
+    /* LINK LAYER: msghdr */
+    memset(&msg, 0x0, sizeof(msg));
+    msg.msg_name = &ka; /* socket name */
+    msg.msg_namelen = sizeof(ka);
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1; /* number of iovec blocks */
+
+    /* LINK LAYER: send netlink message */
+    sendmsg(sd, (struct msghdr *) &msg, 0);
+
+    /* LINK LAYER: re-using old iov and msg for receiving */
+    memset(&iov, 0x0, sizeof(iov));
+    memset(&msg, 0x0, sizeof(msg));
+    iov.iov_base = replybuf;
+    iov.iov_len = sizeof(replybuf);
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+    msg.msg_name = &ka;
+    msg.msg_namelen = sizeof(ka);
+
+    /* receive reply messages */
+    do {
+        len = recvmsg(sd, &msg, 0);
+        for (nh = (struct nlmsghdr *) replybuf; NLMSG_OK(nh, len);
+             nh = NLMSG_NEXT(nh, len)) {
+
+            /* time to bail out */
+            if (nh->nlmsg_type == NLMSG_DONE ||
+                nh->nlmsg_type == NLMSG_NOOP ||
+                nh->nlmsg_type == NLMSG_ERROR ||
+                nh->nlmsg_type != RTM_NEWLINK)
+                continue;
+
+            /* skip interfaces not matching the requested ifindex */
+            ifi = (struct ifinfomsg *) NLMSG_DATA(nh);
+            if (ifi->ifi_index < 1 ||
+                ((uint32_t) ifi->ifi_index) != db->db_ifindex)
+                continue;
+
+            __rat_nl_parse_link_rtattr(db, nh);
+
+        }
+    } while (len);
+
+    /* ---------------------------------------------------------------------- */
+
+    /*
+     * We close and re-open the socket here because the second message's
+     * replies will otherwise always match NLMSG_DONE. The reason is unclear
+     * and the workaround not cool.
+     *
+     * TODO: Dig deeper into netlink and find
+     * out why this happens and how we can manage to process multiple
+     * requests.
+     */
+    close(sd);
+
+    /* re-open netlink socket */
+    sd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+    if (sd < 0) {
+        rat_log_err("Netlink socket: %s", strerror(errno));
+        goto exit_err;
+    }
+
+    /* re-bind netlink socket */
+    if (bind(sd, (struct sockaddr *) &la, sizeof(la))) {
+        rat_log_err("Netlink bind: %s", strerror(errno));
+        goto exit_err_sd;
+    }
+
+    /* ---------------------------------------------------------------------- */
+
+    /* NETWORK LAYER: craft request */
+    memset(&req, 0x0, sizeof(req));
+    req.req_nlmsg.nlmsg_len = NLMSG_LENGTH(sizeof(req.req_un));
+    req.req_nlmsg.nlmsg_type = RTM_GETADDR;
+    req.req_nlmsg.nlmsg_seq = ++seq;
+    req.req_nlmsg.nlmsg_pid = la.nl_pid;
+    req.req_nlmsg.nlmsg_flags = NLM_F_REQUEST;
+    req.req_ifa.ifa_family = AF_INET6;
+    req.req_ifa.ifa_index = db->db_ifindex;
+
+    /* NETWORK LAYER: iovec */
+    memset(&iov, 0x0, sizeof(iov));
+    iov.iov_base = &req;
+    iov.iov_len = req.req_nlmsg.nlmsg_len;
+
+    /* NETWORK LAYER: msghdr */
+    memset(&msg, 0x0, sizeof(msg));
+    msg.msg_name = &ka; /* socket name */
+    msg.msg_namelen = sizeof(ka);
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1; /* number of iovec blocks */
+
+    /* NETWORK LAYER: send netlink message */
+    sendmsg(sd, (struct msghdr *) &msg, 0);
+
+    /* NETWORK LAYER: re-using old iov and msg for receiving */
+    memset(&iov, 0x0, sizeof(iov));
+    memset(&msg, 0x0, sizeof(msg));
+    iov.iov_base = replybuf;
+    iov.iov_len = RAT_NL_REPLYBUFSIZE;
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+    msg.msg_name = &ka;
+    msg.msg_namelen = sizeof(ka);
+
+    /* receive reply messages */
+    do {
+        len = recvmsg(sd, &msg, 0);
+        for (nh = (struct nlmsghdr *) replybuf; NLMSG_OK(nh, len);
+             nh = NLMSG_NEXT(nh, len)) {
+
+            /* time to bail out */
+            if (nh->nlmsg_type == NLMSG_DONE ||
+                nh->nlmsg_type == NLMSG_NOOP ||
+                nh->nlmsg_type == NLMSG_ERROR ||
+                nh->nlmsg_type != RTM_NEWADDR)
+                continue;
+
+            /* skip interfaces not matching the requested ifindex */
+            ifa = (struct ifaddrmsg *) NLMSG_DATA(nh);
+            if (ifa->ifa_index < 1 ||
+                ((uint32_t) ifa->ifa_index) != db->db_ifindex)
+                continue;
+
+            __rat_nl_parse_addr_rtattr(db, nh);
+
+        }
+    } while (len);
+
+    close(sd);
+
+    return RAT_OK;
+
+exit_err_sd:
+    close(sd);
+exit_err:
+    return RAT_ERROR;
+}
+
+
+/**
+ * @brief Parse rtnetlink RTM_*ADDR message
+ *
+ * Updates database entry if a value has changed.
+ *
+ * @param nh                    netlink message header
+ */
+static void __rat_nl_parse_addr (struct nlmsghdr *nh)
+{
+    struct ifaddrmsg *ifa = (struct ifaddrmsg *) NLMSG_DATA(nh);
+    struct rat_db *db;
+    RAT_DEBUG_TRACE();
+
+    if (ifa->ifa_index < 1) {
+        rat_log_err("Netlink: Ignoring out of bound interface index!");
+        goto exit;
+    }
+
+    RAT_DB_WRITELOCK();                                               /* LOCK */
+    db = rat_db_find(ifa->ifa_index);
+    if (db) {
+        if (nh->nlmsg_type == RTM_DELADDR)
+            rat_nl_init_db(db);
+        else
+            __rat_nl_parse_addr_rtattr(db, nh);
+    } else {
+        rat_log_nfo("Netlink: Interface %" PRIu32 ": Ignored.", ifa->ifa_index);
+    }
+    RAT_DB_UNLOCK();
+
+
+exit:
+    return;
+}
+
+
+/**
+ * @brief Netlink listener thread
+ *
+ * Thread listening for interface configuration changes from Kerner via netlink
+ * socket.
+ *
+ * Thread argument has to be set to NULL!
+ *
+ * @param ptr                   thread argument
+ */
+void *rat_nl_listener (void *ptr)
+{
+    int sd;
+    unsigned int len;
+    struct sockaddr_nl la, ka;
+    struct msghdr msg;
+    struct iovec iov;
+    struct nlmsghdr *nh;
+    sigset_t emptyset, blockset;
+    fd_set rfds;
+    char replybuf[RAT_NL_REPLYBUFSIZE];
+    RAT_DEBUG_TRACE();
+
+    rat_log_nfo("Netlink: Thread started.");
+
+    if (ptr)
+        goto exit;
+
+    /* block SIGINT on normal operation */
+    sigemptyset(&blockset);
+    sigaddset(&blockset, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &blockset, NULL);
+
+    /* register signal for times we are waiting for pselect() */
+    signal(SIGINT, rat_lib_signal_dummy_handler);
+
+    /* empty set for times we are waiting for pselect() */
+    sigemptyset(&emptyset);
+
+    /* local address */
+    memset(&la, 0x0, sizeof(la));
+    la.nl_family = AF_NETLINK;
+    la.nl_pid = pthread_self();
+    la.nl_groups = RTMGRP_LINK | RTMGRP_IPV6_IFADDR | RTMGRP_IPV6_IFINFO;
+
+    /* kernel address */
+    memset(&ka, 0x0, sizeof(ka));
+    ka.nl_family = AF_NETLINK;
+    ka.nl_pid = 0;
+
+    /* open netlink socket */
+    sd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+    if (sd < 0) {
+        rat_log_err("Netlink: socket: %s", strerror(errno));
+        goto exit;
+    }
+
+    /* bind netlink socket */
+    if (bind(sd, (struct sockaddr *) &la, sizeof(la))) {
+        rat_log_err("Netlink: bind: %s", strerror(errno));
+        goto exit_sd;
+    }
+
+    /* ---------------------------------------------------------------------- */
+
+    /* scatter/gather array for reply buffer */
+    memset(&iov, 0x0, sizeof(iov));
+    iov.iov_base = replybuf;
+    iov.iov_len = sizeof(replybuf);
+
+    /* craft message header */
+    memset(&msg, 0x0, sizeof(msg));
+    msg.msg_name = &ka; /* socket name */
+    msg.msg_namelen = sizeof(ka);
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = sizeof(iov) / sizeof(struct iovec[1]);
+
+    /* pselect() file descriptor set */
+    FD_ZERO(&rfds);
+    FD_SET(sd, &rfds);
+
+    /* receive answer messages */
+    for(;;) {
+        /* wait for data or thread signal */
+        if (pselect(sd + 1, &rfds, NULL, NULL, NULL, &emptyset) == -1 &&
+            errno == EINTR)
+            goto exit_sd;
+
+        /* receive message */
+        len = recvmsg(sd, &msg, 0);
+        for (nh = (struct nlmsghdr *) replybuf; NLMSG_OK(nh, len);
+             nh = NLMSG_NEXT(nh, len)) {
+
+            /* time to bail out */
+            if (nh->nlmsg_type == NLMSG_DONE ||
+                nh->nlmsg_type == NLMSG_NOOP ||
+                nh->nlmsg_type == NLMSG_ERROR)
+                continue;
+
+            switch (nh->nlmsg_type) {
+                case RTM_NEWLINK:
+                case RTM_DELLINK:
+                    __rat_nl_parse_link(nh);
+                    break;
+                case RTM_NEWADDR:
+                case RTM_DELADDR:
+                    __rat_nl_parse_addr(nh);
+                    break;
+                default:
+                    RAT_DEBUG_MESSAGE("Unhandled RTM %d", nh->nlmsg_type);
+                    break;
+            }
+        }
+    }
+
+exit_sd:
+    close(sd);
+exit:
+    FD_ZERO(&rfds);
+    rat_log_nfo("Netlink: Thread stopped.");
+    pthread_exit(NULL);
+}
 
 
 /* --- control message functions -------------------------------------------- */
@@ -325,14 +1177,14 @@ static int rat_rad_ctl_print_info (const char *fmt, ...)
     memset(&cry, 0x0, sizeof(cry));
     cry.cry_type = RAT_CTL_REPLY_TYPE_PRINT;
     if (fmt) {
-		va_start(arglist, fmt);
-		vsnprintf(tmp, RAT_CTL_REPLY_MSG_LEN, fmt, arglist);
-		va_end(arglist);
+        va_start(arglist, fmt);
+        vsnprintf(tmp, RAT_CTL_REPLY_MSG_LEN, fmt, arglist);
+        va_end(arglist);
         snprintf(cry.cry_msg, RAT_CTL_REPLY_MSG_LEN, "(%s)\n", tmp);
-	}
-	else {
-		snprintf(cry.cry_msg, RAT_CTL_REPLY_MSG_LEN, "\n");
-	}
+    }
+    else {
+        snprintf(cry.cry_msg, RAT_CTL_REPLY_MSG_LEN, "\n");
+    }
 
     return __rat_rad_ctl_send_reply(&cry);
 }
@@ -503,7 +1355,7 @@ static void rat_rad_fill_mi_additional (struct rat_db *db,
             mi->mi_fadingout = 0;
             break;
     }
-    mi->mi_linkmtu = db->db_mtu;
+    mi->mi_mtu = db->db_mtu;
     memcpy(&mi->mi_hwaddr, &db->db_hwaddr, sizeof(mi->mi_hwaddr));
 
 exit:
@@ -527,7 +1379,7 @@ static int rat_rad_fill_mi_ra (struct rat_db *db, struct rat_mod_instance *mi)
         return RAT_ERROR;
 
     memset(mi, 0x0, sizeof(*mi));
-    mi->mi_ifindex = RAT_DB_IFINDEX(db);
+    mi->mi_ifindex = db->db_ifindex;
     mi->mi_index = 0;
     mi->mi_in = 0;
 
@@ -570,7 +1422,7 @@ static int rat_rad_fill_mi_opt (struct rat_db *db, struct rat_db_opt *opt,
 
     /* craft instance information */
     memset(mi, 0x0, sizeof(*mi));
-    mi->mi_ifindex = RAT_DB_IFINDEX(db);
+    mi->mi_ifindex = db->db_ifindex;
     mi->mi_in = 1;
 
     /* index and human readable name of instance */
@@ -607,6 +1459,12 @@ exit_err:
  * @param db                    database entry
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
+ *
+ *         /'\
+ *        /   \      Caution!
+ *       /  |  \     --------
+ *      /   o   \    Caller must hold WRITE LOCK on rat_db_lock!
+ *     '_________'
  */
 static int rat_rad_compile (struct rat_db *db)
 {
@@ -614,14 +1472,14 @@ static int rat_rad_compile (struct rat_db *db)
     struct rat_db_opt *opt;
     RAT_DEBUG_TRACE();
 
-    /* skip compilation if possible to save cycle, time and energy */
+    /* skip compilation if possible to save cycles, time and energy */
     if (db->db_compiled == db->db_version)
         goto exit_ok;
 
     /* compile RA */
     if (rat_rad_fill_mi_ra(db, &mi) != RAT_OK) {
         rat_log_err("Could not prepare instance information for RA on " \
-                    "interface `%" PRIu32 "'!", RAT_DB_IFINDEX(db));
+                    "interface `%" PRIu32 "'!", db->db_ifindex);
         goto exit_err;
     }
     if (rat_mod_rad_call_compile(&mi, rat_rad_ra_mid) != RAT_OK) {
@@ -635,7 +1493,7 @@ static int rat_rad_compile (struct rat_db *db)
             rat_log_err("Could not prepare instance information for module " \
                         "`%" PRIu16 "' instance `%" PRIu16 "' on " \
                         "interface `%" PRIu32 "'!",
-                        opt->opt_mid, opt->opt_oid, RAT_DB_IFINDEX(db));
+                        opt->opt_mid, opt->opt_oid, db->db_ifindex);
             continue;
         }
         if (rat_mod_rad_call_compile(&mi, opt->opt_mid) != RAT_OK) {
@@ -734,7 +1592,8 @@ static void *rat_rad_listener (void *ptr)
     uint8_t buf[RAT_NDP_MAXPACKETLEN];
     struct nd_router_solicit *ndrs;
     /* others */
-    struct rat_db *db = NULL;
+    uint32_t ifindex;
+    struct rat_db *db;
     useconds_t delay;
     struct rat_ps *ps;
     uint64_t bytes;
@@ -808,9 +1667,6 @@ static void *rat_rad_listener (void *ptr)
     FD_SET(rat_rad_rsra_sd, &rfds);
 
     for (;;) {
-        if (db)
-            db = rat_db_release(db);                               /* RELEASE */
-
         /* wait for data or thread signal */
         if (pselect(rat_rad_rsra_sd + 1, &rfds,
                     NULL, NULL, NULL, &emptyset) == -1 &&
@@ -837,12 +1693,13 @@ static void *rat_rad_listener (void *ptr)
             !inet_ntop(AF_INET6, (void *) &ipi->ipi_addr, dstname,
                        sizeof(dstname)))
             continue;
+        ifindex = ipi->ipi_ifindex;
 
         /* check hop limit */
         if (*hl != RAT_NDP_HOPLIMIT) {
             rat_log_wrn("Listener: Interface %u: Received RS " \
                         "with invalid hop limit `%d' from `%s'",
-                        ipi->ipi_ifindex, *hl, srcname);
+                        ifindex, *hl, srcname);
             continue;
         }
 
@@ -850,7 +1707,7 @@ static void *rat_rad_listener (void *ptr)
         unspecified = rat_lib_6addr_is_unspecified(&srcaddr.sin6_addr);
         if (!rat_lib_6addr_is_linklocal(&srcaddr.sin6_addr) && !unspecified) {
             rat_log_wrn("Listener: Interface %u: Received RS from invalid " \
-                        "source address `%s'", ipi->ipi_ifindex, srcname);
+                        "source address `%s'", ifindex, srcname);
             continue;
         }
 
@@ -858,21 +1715,27 @@ static void *rat_rad_listener (void *ptr)
         if (!rat_lib_6addr_is_allrouters(&ipi->ipi_addr)) {
             rat_log_wrn("Listener: Interface %u: Received RS with invalid " \
                         "destination address `%s' from `%s'",
-                        ipi->ipi_ifindex, dstname, srcname);
+                        ifindex, dstname, srcname);
             continue;
         }
 
         /* log RS */
         rat_log_nfo("Listener: Interface %u: Received RS from `%s' " \
-                    "(%zu bytes)", ipi->ipi_ifindex, srcname, slen);
+                    "(%zu bytes)", ifindex, srcname, slen);
 
-        db = rat_db_grab(ipi->ipi_ifindex);                           /* GRAB */
-        if (!db)
+        RAT_DB_WRITELOCK();                                           /* LOCK */
+
+        /* check for existence */
+        db = rat_db_find(ifindex);
+        if (!db) {
+            RAT_DB_UNLOCK();
             continue;
+        }
 
         /* check for valid state, other functions may have changed it */
         if (db->db_state == RAT_DB_STATE_DISABLED ||
             db->db_state == RAT_DB_STATE_DESTROYED) {
+            RAT_DB_UNLOCK();
             continue;
         }
 
@@ -917,12 +1780,14 @@ static void *rat_rad_listener (void *ptr)
             if (rat_rad_compile(db) != RAT_OK) {
                 rat_log_err("Listener: Interface %" PRIu32 ": " \
                             "Could not compile RA", db->db_ifindex);
+                RAT_DB_UNLOCK();
                 continue;
             }
             ps = rat_rad_packetset(db);
             if (!ps) {
                 rat_log_err("Listener: Interface %" PRIu32 ": " \
                             "Could not create packet set", db->db_ifindex);
+                RAT_DB_UNLOCK();
                 continue;
             }
             rat_ps_set_daddr(ps, &srcaddr.sin6_addr);
@@ -932,6 +1797,7 @@ static void *rat_rad_listener (void *ptr)
             if (rat_ps_send(ps) != RAT_OK) {
                 rat_log_err("Listener: Interface %" PRIu32 ": " \
                             "Could not send packet set", db->db_ifindex);
+                RAT_DB_UNLOCK();
                 continue;
             }
 
@@ -939,6 +1805,8 @@ static void *rat_rad_listener (void *ptr)
             db->db_stat_total++;
             db->db_stat_solicited++;
             db->db_stat_bytes += bytes;
+
+            RAT_DB_UNLOCK();                                        /* UNLOCK */
         }
     }
 
@@ -954,7 +1822,7 @@ exit:
  *
  * @param ptr                   thread argument
  *
- * @return Detached thread. Does not return a value.
+ * @return This is a detached thread that does not return a value.
  */
 static void *rat_rad_worker (void *ptr)
 {
@@ -969,13 +1837,6 @@ static void *rat_rad_worker (void *ptr)
     rat_lib_6addr_set_allnodes(&allnodes);
     rat_log_nfo("Worker: Interface %" PRIu32 ": Thread started.", ifindex);
 
-    db = rat_db_grab(ifindex);
-    if (!db) {
-        rat_log_err("Worker: Interface %" PRIu32 ": Could not grab interface!",
-                    ifindex);
-        goto exit;
-    }
-
     /* join all routers multicast group for solicited RAs */
     if (rat_mc_join(rat_rad_rsra_sd, ifindex) == RAT_OK)
         rat_log_nfo("Worker: Interface %" PRIu32 ": Joined " \
@@ -984,6 +1845,14 @@ static void *rat_rad_worker (void *ptr)
         rat_log_wrn("Worker: Interface %" PRIu32 ": Could not join " \
                     "all routers multicast group.", ifindex);
 
+
+    RAT_DB_WRITELOCK();                                               /* LOCK */
+    db = rat_db_find(ifindex);
+    if (!db) {
+        rat_log_err("Worker: Interface %" PRIu32 ": Could not grab interface!",
+                    ifindex);
+        goto exit_unlock;
+    }
     for (;;) {
         /*
          * Unsolicited Router Advertisements are not strictly periodic: the
@@ -1032,7 +1901,7 @@ static void *rat_rad_worker (void *ptr)
             db->db_worker_next.tv_sec = time(NULL) + iv;
             rat_log_nfo("Worker: Interface %" PRIu32 ": Sleeping %d seconds.",
                         ifindex, iv);
-            rat_db_release(db);                                    /* RELEASE */
+            RAT_DB_UNLOCK();                                        /* UNLOCK */
 
             /*
              * going to sleep
@@ -1043,7 +1912,6 @@ static void *rat_rad_worker (void *ptr)
              */
             pthread_cond_timedwait(&db->db_worker_cond, &db->db_worker_mutex,
                                    &db->db_worker_next);
-
             /*   ____                 _         _       _     _   _
              *  / ___| ___   ___   __| |  _ __ (_) __ _| |__ | |_| |
              * | |  _ / _ \ / _ \ / _` | | '_ \| |/ _` | '_ \| __| |
@@ -1051,37 +1919,39 @@ static void *rat_rad_worker (void *ptr)
              *  \____|\___/ \___/ \__,_| |_| |_|_|\__, |_| |_|\__(_)
              *                                    |___/sweet prince!
              */
-            db = rat_db_grab(ifindex);                                /* GRAB */
+
+            RAT_DB_WRITELOCK();                                       /* LOCK */
+            db = rat_db_find(ifindex);
             if (!db) {
                 rat_log_err("Worker: Interface %" PRIu32 ": " \
                             "Could not grab interface!", ifindex);
-                goto exit;
+                goto exit_unlock;
             }
         }
 
         /* check for valid state, other functions may have changed it */
         if (db->db_state == RAT_DB_STATE_DISABLED ||
             db->db_state == RAT_DB_STATE_DESTROYED)
-            goto exit_release;
+            goto exit_unlock;
 
         /* check for interface state */
         if (!db->db_ifup) {
             rat_log_err("Worker: Interface %" PRIu32 ":" \
                         "Interface went down!", ifindex);
-            goto exit_release;
+            goto exit_unlock;
         }
 
         /* send RA */
         if (rat_rad_compile(db) != RAT_OK) {
             rat_log_err("Worker: Interface %" PRIu32 ":" \
                         "Could not compile RA!", ifindex);
-            goto exit_release;
+            goto exit_unlock;
         }
         ps = rat_rad_packetset(db);
         if (!ps) {
             rat_log_err("Worker: Interface %" PRIu32 ":" \
                         "Could not create packet set!", ifindex);
-            goto exit_release;
+            goto exit_unlock;
         }
         rat_ps_set_daddr(ps, &allnodes);
         rat_ps_set_delay(ps, db->db_delay);
@@ -1093,7 +1963,7 @@ static void *rat_rad_worker (void *ptr)
         if (rat_ps_send(ps) != RAT_OK) {
             rat_log_err("Worker: Interface %" PRIu32 ":" \
                         "Could not send packet set!", ifindex);
-            goto exit_release;
+            goto exit_unlock;
         }
 
         /* update statistics */
@@ -1105,40 +1975,41 @@ static void *rat_rad_worker (void *ptr)
         switch (db->db_state) {
         case RAT_DB_STATE_FADEIN1:
             db->db_state = RAT_DB_STATE_FADEIN2;
-            rat_db_updated(db);
+            RAT_DB_UPDATE(db);
             break;
         case RAT_DB_STATE_FADEIN2:
             db->db_state = RAT_DB_STATE_FADEIN3;
-            rat_db_updated(db);
+            RAT_DB_UPDATE(db);
             break;
         case RAT_DB_STATE_FADEIN3:
             db->db_state = RAT_DB_STATE_ENABLED;
-            rat_db_updated(db);
+            RAT_DB_UPDATE(db);
             break;
         case RAT_DB_STATE_FADEOUT1:
             db->db_state = RAT_DB_STATE_FADEOUT2;
-            rat_db_updated(db);
+            RAT_DB_UPDATE(db);
             break;
         case RAT_DB_STATE_FADEOUT2:
             db->db_state = RAT_DB_STATE_FADEOUT3;
-            rat_db_updated(db);
+            RAT_DB_UPDATE(db);
             break;
         case RAT_DB_STATE_FADEOUT3:
             db->db_state = RAT_DB_STATE_DISABLED;
-            goto exit_release;
+            goto exit_unlock;
             break;
         default:
             break;
         }
     }
 
-exit_release:
+exit_unlock:
     if (db) {
         db->db_state = RAT_DB_STATE_DISABLED;
         db->db_worker_next.tv_sec = 0;
-        rat_db_updated(db);
-        db = rat_db_release(db);
+        RAT_DB_UPDATE(db);
+        RAT_DB_UNLOCK();
     }
+
     /* leave all routers multicast group for solicited RAs */
     if (rat_mc_leave(rat_rad_rsra_sd, ifindex) == RAT_OK)
         rat_log_nfo("Worker: Interface %" PRIu32 ": Left " \
@@ -1146,7 +2017,8 @@ exit_release:
     else
         rat_log_wrn("Worker: Interface %" PRIu32 ": Could not leave " \
                     "all routers multicast group ", ifindex);
-exit:
+
+    /* log */
     rat_log_nfo("Worker: Interface %" PRIu32 ": Thread stopped.", ifindex);
     pthread_exit(NULL);
 }
@@ -1162,18 +2034,38 @@ exit:
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
  */
-static int rat_rad_ra_destroy (struct rat_db *db)
+static int rat_rad_ra_destroy (uint32_t ifindex)
 {
-    uint32_t ifindex;
+    struct rat_db *db, *pre, *cur;
     struct rat_db_opt *opt;
     struct rat_mod_instance mi;
     RAT_DEBUG_TRACE();
 
+    RAT_DB_WRITELOCK();                                               /* LOCK */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
     if (db->db_state != RAT_DB_STATE_DISABLED) {
         rat_rad_mf.mf_error("RA is still active. Disable first!");
-        goto exit_err;
+        goto exit_err_unlock;
     }
     db->db_state = RAT_DB_STATE_DESTROYED;
+    /* remove interface from database */
+    if (rat_db_list == db) {
+        /* interface is first element in list */
+        rat_db_list = db->db_next;
+    } else {
+        /* interface is not the first element in list */
+        pre = rat_db_list;
+        for (cur = pre->db_next; cur; cur = cur->db_next) {
+            if (cur == db) {
+                pre->db_next = cur->db_next;
+                break;
+            }
+            pre = cur;
+        }
+    }
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
 
     /* kill all the options */
     while (db->db_opt) {
@@ -1186,13 +2078,13 @@ static int rat_rad_ra_destroy (struct rat_db *db)
         rat_db_del_opt(db, opt->opt_mid, opt->opt_oid);
     }
 
-    ifindex = RAT_DB_IFINDEX(db);
-    db = rat_db_release(db);
-    rat_db_destroy(ifindex);
+    /* free space */
+    free(db);
 
     return RAT_OK;
 
-exit_err:
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
     return RAT_ERROR;
 }
 
@@ -1209,29 +2101,31 @@ exit_err:
  */
 static int rat_rad_ra_create (uint32_t ifindex)
 {
-    struct rat_db *db;
+    struct rat_db *db, *cur;
     struct rat_mod_instance mi;
     RAT_DEBUG_TRACE();
 
-    if (rat_db_create(ifindex) != RAT_OK) {
-        rat_rad_mf.mf_error("Could not create database entry for " \
-                            "Router Advertisement!");
+    if (!ifindex)
         goto exit_err;
-    }
 
-    db = rat_db_grab(ifindex);
-    if (!db) {
-        rat_rad_mf.mf_error("Could not get database entry for " \
-                            "Router Advertisement!");
+    /* allocate space */
+    db = calloc(1, sizeof(*db));
+    if (!db)
         goto exit_err;
-    }
 
+    /* init db item */
+    db->db_ifindex = ifindex;
     db->db_state = RAT_DB_STATE_DISABLED;
     db->db_maxadvint = RAT_DB_MAXADVINT_DEF;
     db->db_minadvint = RAT_DB_MINADVINT_DEF;
+    db->db_ifup = 0;
     db->db_created = time(NULL);
-    db->db_updated = time(NULL);
+    db->db_updated = db->db_created;
+    db->db_compiled = 0;
     db->db_version = 1;
+
+
+    RAT_DB_WRITELOCK();                                               /* LOCK */
 
     /* thread */
     pthread_attr_init(&db->db_worker_attr);
@@ -1239,40 +2133,51 @@ static int rat_rad_ra_create (uint32_t ifindex)
     if (pthread_create(&db->db_worker_thread, &db->db_worker_attr,
                        rat_rad_thread_dummy, NULL)) {
         rat_rad_mf.mf_error("Could not initialize worker thread.");
-        goto exit_err_destroy;
+        goto exit_err_unlock_free;
     }
     pthread_join(db->db_worker_thread, NULL);
-
 
     /* interface */
     if (rat_nl_init_db(db) != RAT_OK) {
         rat_rad_mf.mf_error("Could not initialize! Interface down?");
-        goto exit_err_destroy;
+        goto exit_err_unlock_free_thread;
     }
 
     /* module */
     if (rat_rad_fill_mi_ra(db, &mi) != RAT_OK) {
         rat_rad_mf.mf_error("Could not prepare instance information for RA " \
                             " on interface `%" PRIu32 "'!", ifindex);
-        goto exit_err_destroy;
+        goto exit_err_unlock_free_thread;
     }
     if (rat_mod_rad_call_aid(&rat_rad_mf, &mi, rat_rad_ra_mid,
                              RAT_MOD_AID_CREATE) != RAT_OK) {
         rat_rad_mf.mf_error("Could not initialize Router Advertisement!");
-        goto exit_err_destroy;
+        goto exit_err_unlock_free_thread;
     }
 
-    db = rat_db_release(db);
-
+    /* add item to database */
+    if (!rat_db_list) {
+        /* list is empty */
+        rat_db_list = db;
+    } else {
+        /* list is not empty, append */
+        for (cur = rat_db_list; cur->db_next; cur = cur->db_next);
+        cur->db_next = db;
+    }
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
     return RAT_OK;
 
-exit_err_destroy:
-    if (db) {
-        pthread_attr_destroy(&db->db_worker_attr);
-        db = rat_db_release(db);
-    }
-    rat_db_destroy(ifindex);
+
+exit_err_unlock_free_thread:
+    pthread_attr_destroy(&db->db_worker_attr);
+
+exit_err_unlock_free:
+    free(db);
+    RAT_DB_UNLOCK();
+
 exit_err:
+    rat_rad_mf.mf_error("Could not create database entry for " \
+                        "Router Advertisement!");
     return RAT_ERROR;
 }
 
@@ -1286,8 +2191,14 @@ exit_err:
  * @param db                    database entry
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
+ *
+ *         /'\
+ *        /   \      Caution!
+ *       /  |  \     --------
+ *      /   o   \    Caller must hold AT LEAST a READ LOCK on rat_db_lock!
+ *     '_________'
  */
-static int rat_rad_ra_show (struct rat_db *db)
+static int __rat_rad_ra_show (struct rat_db *db)
 {
     int ret;
     char buffer[MAX(
@@ -1449,6 +2360,20 @@ static int rat_rad_ra_show (struct rat_db *db)
 }
 
 
+static int rat_rad_ra_show (uint32_t ifindex)
+{
+    struct rat_db *db;
+
+    RAT_DB_READLOCK();                                                /* LOCK */
+    db = rat_db_find(ifindex);
+    if (db)
+        return __rat_rad_ra_show(db);
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
+
+    return RAT_ERROR;
+}
+
+
 /**
  * @brief Shows all RA in database
  *
@@ -1459,20 +2384,17 @@ static int rat_rad_ra_showall (void)
     struct rat_db *db;
     RAT_DEBUG_TRACE();
 
-    db = rat_db_grab_first();
-    if (!db) {
+    if (rat_db_list) {
+        RAT_DB_READLOCK();                                            /* LOCK */
+        for (db = rat_db_list; db; db = db->db_next)
+            __rat_rad_ra_show(db);
+        RAT_DB_UNLOCK();                                            /* UNLOCK */
+    } else {
         rat_rad_mf.mf_error("No Router Advertisement configured!");
-        goto exit_err;
-    }
-    while (db) {
-        rat_rad_ra_show(db);
-        db = rat_db_grab_next(db);
+        return RAT_ERROR;
     }
 
     return RAT_OK;
-
-exit_err:
-    return RAT_ERROR;
 }
 
 
@@ -1485,8 +2407,14 @@ exit_err:
  * @param db                    database entry
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
+ *
+ *         /'\
+ *        /   \      Caution!
+ *       /  |  \     --------
+ *      /   o   \    Caller must hold AT LEAST a READ LOCK on rat_db_lock!
+ *     '_________'
  */
-static int rat_rad_ra_dump (struct rat_db *db)
+static int __rat_rad_ra_dump (struct rat_db *db)
 {
     int ret;
     struct rat_mod_instance mi, rami;
@@ -1541,6 +2469,20 @@ exit_ret:
 }
 
 
+static int rat_rad_ra_dump (uint32_t ifindex)
+{
+    struct rat_db *db;
+
+    RAT_DB_READLOCK();                                                /* LOCK */
+    db = rat_db_find(ifindex);
+    if (db)
+        return __rat_rad_ra_dump(db);
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
+
+    return RAT_ERROR;
+}
+
+
 /**
  * @brief Dumps all RA in database
  *
@@ -1551,20 +2493,17 @@ static int rat_rad_ra_dumpall (void)
     struct rat_db *db;
     RAT_DEBUG_TRACE();
 
-    db = rat_db_grab_first();
-    if (!db) {
+    if (rat_db_list) {
+        RAT_DB_READLOCK();                                            /* LOCK */
+        for (db = rat_db_list; db; db = db->db_next)
+            __rat_rad_ra_dump(db);
+        RAT_DB_UNLOCK();                                            /* UNLOCK */
+    } else {
         rat_rad_mf.mf_error("No Router Advertisement configured!");
-        goto exit_err;
-    }
-    while (db) {
-        rat_rad_ra_dump(db);
-        db = rat_db_grab_next(db);
+        return RAT_ERROR;
     }
 
     return RAT_OK;
-
-exit_err:
-    return RAT_ERROR;
 }
 
 
@@ -1575,9 +2514,17 @@ exit_err:
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
  */
-static int rat_rad_ra_enable (struct rat_db *db)
+static int rat_rad_ra_enable (uint32_t ifindex)
 {
+    struct rat_db *db;
     RAT_DEBUG_TRACE();
+
+    RAT_DB_WRITELOCK();                                               /* LOCK */
+
+    /* find RA */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
 
     /* check state */
     switch (db->db_state) {
@@ -1588,42 +2535,44 @@ static int rat_rad_ra_enable (struct rat_db *db)
         case RAT_DB_STATE_FADEIN3:
         case RAT_DB_STATE_ENABLED:
             rat_rad_mf.mf_error("RA already enabled!");
-            goto exit_err;
+            goto exit_err_unlock;
             break;
         case RAT_DB_STATE_FADEOUT1:
         case RAT_DB_STATE_FADEOUT2:
         case RAT_DB_STATE_FADEOUT3:
             rat_rad_mf.mf_error("RA currently de-advertising! Kill first.");
-            goto exit_err;
+            goto exit_err_unlock;
             break;
         case RAT_DB_STATE_DESTROYED:
             rat_rad_mf.mf_error("RA currently being destroyed! Be patient.");
-            goto exit_err;
+            goto exit_err_unlock;
             break;
         default:
             rat_rad_mf.mf_error("Could not enable RA!");
-            goto exit_err;
+            goto exit_err_unlock;
             break;
     }
 
     /* interface up/down state */
     if (!db->db_ifup) {
         rat_rad_mf.mf_error("Interface down!");
-        goto exit_err;
+        goto exit_err_unlock;
     }
 
     db->db_state = RAT_DB_STATE_FADEIN1;
+    RAT_DB_UPDATE(db);
 
     /* create worker thread for unsolicited RAs */
     if (pthread_create(&db->db_worker_thread, &db->db_worker_attr,
-                       rat_rad_worker, (void *) &RAT_DB_IFINDEX(db)))
-        goto exit_err;
+                       rat_rad_worker, (void *) &db->db_ifindex))
+        goto exit_err_unlock;
 
-    rat_db_updated(db);
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
 
     return RAT_OK;
 
-exit_err:
+exit_err_unlock:
+    RAT_DB_UNLOCK();
     return RAT_ERROR;
 }
 
@@ -1635,15 +2584,25 @@ exit_err:
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
  */
-static int rat_rad_ra_disable (struct rat_db *db)
+static int rat_rad_ra_disable (uint32_t ifindex)
 {
+    struct rat_db *db;
     RAT_DEBUG_TRACE();
 
+    RAT_DB_WRITELOCK();                                               /* LOCK */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
     db->db_state = RAT_DB_STATE_FADEOUT1;
-    rat_db_updated(db);
+    RAT_DB_UPDATE(db);
     pthread_cond_signal(&db->db_worker_cond);
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
 
     return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();
+    return RAT_ERROR;
 }
 
 /**
@@ -1656,16 +2615,25 @@ static int rat_rad_ra_disable (struct rat_db *db)
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
  */
-static int rat_rad_ra_kill (struct rat_db *db)
+static int rat_rad_ra_kill (uint32_t ifindex)
 {
+    struct rat_db *db;
     RAT_DEBUG_TRACE();
 
+    RAT_DB_WRITELOCK();                                               /* LOCK */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
     db->db_state = RAT_DB_STATE_DISABLED;
-    rat_db_updated(db);
-
+    RAT_DB_UPDATE(db);
     pthread_cond_signal(&db->db_worker_cond);
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
 
     return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();
+    return RAT_ERROR;
 }
 
 
@@ -1720,10 +2688,11 @@ static uint16_t rat_rad_ra_minadvint_max (struct rat_db *db)
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
  */
-static int rat_rad_ra_set_maxadvint (struct rat_db *db, uint8_t *data,
+static int rat_rad_ra_set_maxadvint (uint32_t ifindex, uint8_t *data,
                                      uint16_t len)
 {
     uint16_t advint;
+    struct rat_db *db;
     RAT_DEBUG_TRACE();
 
     if (len < sizeof(uint16_t))
@@ -1739,13 +2708,18 @@ static int rat_rad_ra_set_maxadvint (struct rat_db *db, uint8_t *data,
         goto exit_err;
     }
 
+    RAT_DB_WRITELOCK();                                               /* LOCK */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
     /* lower boundary check (must not come too close to minimum interval */
     if (advint < rat_rad_ra_maxadvint_min(db)) {
-        rat_rad_mf.mf_message("Warning: Invalid maximum interval " \
+        rat_rad_mf.mf_message("Invalid maximum interval " \
                               "`%" PRIu16 "'!", advint);
         rat_rad_mf.mf_message("Must not be less than 1.3 times " \
                               "Minimum Interval (%" PRIu16 ").",
                               rat_rad_ra_maxadvint_min(db));
+        goto exit_err_unlock;
     }
 
     /*
@@ -1754,11 +2728,14 @@ static int rat_rad_ra_set_maxadvint (struct rat_db *db, uint8_t *data,
      */
     if (advint < db->db_maxadvint)
         pthread_cond_signal(&db->db_worker_cond);
-
     db->db_maxadvint = advint;
-    rat_db_updated(db);
+    RAT_DB_UPDATE(db);
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
 
     return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();
 
 exit_err:
     return RAT_ERROR;
@@ -1774,10 +2751,11 @@ exit_err:
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
  */
-static int rat_rad_ra_set_minadvint (struct rat_db *db, uint8_t *data,
+static int rat_rad_ra_set_minadvint (uint32_t ifindex, uint8_t *data,
                                      uint16_t len)
 {
     uint16_t advint;
+    struct rat_db *db;
     RAT_DEBUG_TRACE();
 
     if (len < sizeof(uint16_t))
@@ -1792,13 +2770,19 @@ static int rat_rad_ra_set_minadvint (struct rat_db *db, uint8_t *data,
                               RAT_DB_MINADVINT_MIN);
         goto exit_err;
     }
+
+    RAT_DB_WRITELOCK();                                               /* LOCK */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
     /* upper boundary check (must not come too close to maximum interval */
     if (advint > rat_rad_ra_minadvint_max(db)) {
-        rat_rad_mf.mf_message("Warning: Invalid minimum interval " \
+        rat_rad_mf.mf_message("Invalid minimum interval " \
                               "`%" PRIu16 "'!", advint);
         rat_rad_mf.mf_message("Must not be greater than 0.75 times " \
                               "Maximum Interval (%" PRIu16 ").",
                               rat_rad_ra_minadvint_max(db));
+        goto exit_err_unlock;
     }
 
     /*
@@ -1809,9 +2793,13 @@ static int rat_rad_ra_set_minadvint (struct rat_db *db, uint8_t *data,
         pthread_cond_signal(&db->db_worker_cond);
 
     db->db_minadvint = advint;
-    rat_db_updated(db);
+    RAT_DB_UPDATE(db);
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
 
     return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();
 
 exit_err:
     return RAT_ERROR;
@@ -1830,33 +2818,31 @@ exit_err:
  */
 static int rat_rad_exec_module (struct rat_ctl_request *crq)
 {
+    int ifexists;
     struct rat_db *db;
     struct rat_mod_instance mi;
     struct rat_db_opt *opt;
     RAT_DEBUG_TRACE();
 
-    db = rat_db_grab(crq->crq_ifindex);
+    RAT_DB_READLOCK();                                                /* LOCK */
+    ifexists = rat_db_find(crq->crq_ifindex) ? 1 : 0;
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
 
     /*
      * we have not found the interface and we shall create it
      */
-    if (!db && rat_mod_icpt_aid(crq->crq_mid, "ra",
-                                crq->crq_aid, "create") == RAT_OK) {
+    if (!ifexists && rat_mod_icpt_aid(crq->crq_mid, "ra",
+                                      crq->crq_aid, "create") == RAT_OK) {
         RAT_DEBUG_MESSAGE("Intercepting `ra@dev create'");
-        if (rat_rad_ra_create(crq->crq_ifindex) == RAT_OK) {
-            /*
-             * intentionally skipping release
-             * there is no db at this moment to release
-             */
-            db = NULL;
-            goto exit_ok;
-        }
+        if (rat_rad_ra_create(crq->crq_ifindex) != RAT_OK)
+            goto exit_err;
     }
+
     /*
      * we could not find the interface. too bad :(
      */
-    else if (!db) {
-        rat_rad_mf.mf_error("Interface not found in database!");
+    else if (!ifexists) {
+        rat_rad_mf.mf_error("Router Advertisement not found!");
     }
 
     /*
@@ -1878,8 +2864,8 @@ static int rat_rad_exec_module (struct rat_ctl_request *crq)
     else if (rat_mod_icpt_aid(crq->crq_mid, "ra",
                               crq->crq_aid, "enable") == RAT_OK) {
         RAT_DEBUG_MESSAGE("Intercepting `ra@dev enable'");
-        if (rat_rad_ra_enable(db) == RAT_OK) {
-            goto exit_ok_release;
+        if (rat_rad_ra_enable(crq->crq_ifindex) != RAT_OK) {
+            goto exit_err;
         }
     }
 
@@ -1892,8 +2878,8 @@ static int rat_rad_exec_module (struct rat_ctl_request *crq)
     else if (rat_mod_icpt_aid(crq->crq_mid, "ra",
                               crq->crq_aid, "disable") == RAT_OK) {
         RAT_DEBUG_MESSAGE("Intercepting `ra@dev disable'");
-        if (rat_rad_ra_disable(db) == RAT_OK)
-            goto exit_ok_release;
+        if (rat_rad_ra_disable(crq->crq_ifindex) != RAT_OK)
+            goto exit_err;
     }
     /*
      * ra@dev kill
@@ -1904,8 +2890,8 @@ static int rat_rad_exec_module (struct rat_ctl_request *crq)
     else if (rat_mod_icpt_aid(crq->crq_mid, "ra",
                               crq->crq_aid, "kill") == RAT_OK) {
         RAT_DEBUG_MESSAGE("Intercepting `ra@dev kill'");
-        if (rat_rad_ra_kill(db) == RAT_OK)
-            goto exit_ok_release;
+        if (rat_rad_ra_kill(crq->crq_ifindex) != RAT_OK)
+            goto exit_err;
     }
 
     /*
@@ -1917,8 +2903,8 @@ static int rat_rad_exec_module (struct rat_ctl_request *crq)
     else if (rat_mod_icpt_aid(crq->crq_mid, "ra",
                               crq->crq_aid, "show") == RAT_OK) {
         RAT_DEBUG_MESSAGE("Intercepting `ra@dev show'");
-        if (rat_rad_ra_show(db) == RAT_OK)
-            goto exit_ok_release;
+        if (rat_rad_ra_show(crq->crq_ifindex) != RAT_OK)
+            goto exit_err;
     }
 
     /*
@@ -1930,8 +2916,8 @@ static int rat_rad_exec_module (struct rat_ctl_request *crq)
     else if (rat_mod_icpt_aid(crq->crq_mid, "ra",
                               crq->crq_aid, "dump") == RAT_OK) {
         RAT_DEBUG_MESSAGE("Intercepting `ra@dev dump'");
-        if (rat_rad_ra_dump(db) == RAT_OK)
-            goto exit_ok_release;
+        if (rat_rad_ra_dump(crq->crq_ifindex) != RAT_OK)
+            goto exit_err;
     }
 
     /*
@@ -1942,14 +2928,8 @@ static int rat_rad_exec_module (struct rat_ctl_request *crq)
     else if (rat_mod_icpt_aid(crq->crq_mid, "ra",
                               crq->crq_aid, "destroy") == RAT_OK) {
         RAT_DEBUG_MESSAGE("Intercepting `ra@dev destroy'");
-        if (rat_rad_ra_destroy(db) == RAT_OK) {
-            /*
-             * intentionally skipping release
-             * there is no db anymore
-             */
-            db = NULL;
-            goto exit_ok;
-        }
+        if (rat_rad_ra_destroy(crq->crq_ifindex) != RAT_OK)
+            goto exit_err;
     }
 
     /*
@@ -1962,9 +2942,9 @@ static int rat_rad_exec_module (struct rat_ctl_request *crq)
                               crq->crq_aid, "set",
                               crq->crq_pid, "maximum-interval") == RAT_OK) {
         RAT_DEBUG_MESSAGE("Intercepting `ra@dev set maximum-interval'");
-        if (rat_rad_ra_set_maxadvint(db, crq->crq_data,
-                                     RAT_CTL_REQ_DATA_LEN) == RAT_OK)
-            goto exit_ok_release;
+        if (rat_rad_ra_set_maxadvint(crq->crq_ifindex, crq->crq_data,
+                                     RAT_CTL_REQ_DATA_LEN) != RAT_OK)
+            goto exit_err;
     }
 
     /*
@@ -1977,9 +2957,9 @@ static int rat_rad_exec_module (struct rat_ctl_request *crq)
                               crq->crq_aid, "set",
                               crq->crq_pid, "minimum-interval") == RAT_OK) {
         RAT_DEBUG_MESSAGE("Intercepting `ra@dev set minimum-interval'");
-        if (rat_rad_ra_set_minadvint(db, crq->crq_data,
-                                     RAT_CTL_REQ_DATA_LEN) == RAT_OK)
-            goto exit_ok_release;
+        if (rat_rad_ra_set_minadvint(crq->crq_ifindex, crq->crq_data,
+                                     RAT_CTL_REQ_DATA_LEN) != RAT_OK)
+            goto exit_err;
     }
 
     /*
@@ -1990,51 +2970,65 @@ static int rat_rad_exec_module (struct rat_ctl_request *crq)
     else if (rat_mod_icpt_aid(crq->crq_mid, "ra",
                               crq->crq_aid, "set") == RAT_OK) {
         RAT_DEBUG_MESSAGE("Intercepting `ra@dev set'");
+
+        RAT_DB_WRITELOCK();                                           /* LOCK */
+        db = rat_db_find(crq->crq_ifindex);
+        if (!db) {
+            rat_rad_mf.mf_error("Router Advertisement not found!");
+            goto exit_err_unlock;
+        }
         rat_rad_fill_mi_ra(db, &mi);
         if (rat_mod_rad_call_pid(&rat_rad_mf, &mi,
                                  crq->crq_mid, crq->crq_aid,
                                  crq->crq_pid, crq->crq_data,
-                                 sizeof(crq->crq_data)) == RAT_OK) {
-            rat_db_updated(db);
-            goto exit_ok_release;
+                                 sizeof(crq->crq_data)) != RAT_OK) {
+            goto exit_err_unlock;
         }
+        RAT_DB_UPDATE(db);
+        RAT_DB_UNLOCK();                                            /* UNLOCK */
     }
 
     /* execute module */
     else {
+        RAT_DB_WRITELOCK();                                           /* LOCK */
+        db = rat_db_find(crq->crq_ifindex);
+        if (!db) {
+            rat_rad_mf.mf_error("Router Advertisement not found!");
+            goto exit_err_unlock;
+        }
         switch (crq->crq_aid) {
             case RAT_MOD_AID_CREATE:
                 opt = rat_db_get_opt(db, crq->crq_mid, crq->crq_oid);
                 if (opt) {
                     rat_rad_mf.mf_error("Option already exists!");
-                    goto exit_err_release;
+                    goto exit_err_unlock;
                 }
                 opt = rat_db_add_opt(db, crq->crq_mid, crq->crq_oid);
                 if (!opt) {
                     rat_rad_mf.mf_error("Could not create option!");
-                    goto exit_err_release;
+                    goto exit_err_unlock;
                 }
                 rat_rad_fill_mi_opt(db, opt, &mi);
                 if (rat_mod_rad_call_aid(&rat_rad_mf, &mi, crq->crq_mid,
-                                         crq->crq_aid) == RAT_OK) {
-                    rat_db_updated(db);
-                    goto exit_ok_release;
+                                         crq->crq_aid) != RAT_OK) {
+                    rat_db_del_opt(db, crq->crq_mid, crq->crq_oid);
+                    goto exit_err_unlock;
                 }
-                rat_db_del_opt(db, crq->crq_mid, crq->crq_oid);
+                RAT_DB_UPDATE(db);
                 break;
             case RAT_MOD_AID_DESTROY:
                 opt = rat_db_get_opt(db, crq->crq_mid, crq->crq_oid);
                 if (!opt) {
                     rat_rad_mf.mf_error("Option does not exist!");
-                    goto exit_err_release;
+                    goto exit_err_unlock;
                 }
                 rat_rad_fill_mi_opt(db, opt, &mi);
                 if (rat_mod_rad_call_aid(&rat_rad_mf, &mi, crq->crq_mid,
-                                         crq->crq_aid) == RAT_OK) {
+                                         crq->crq_aid) != RAT_OK) {
                     rat_db_del_opt(db, crq->crq_mid, crq->crq_oid);
-                    rat_db_updated(db);
-                    goto exit_ok_release;
+                    goto exit_err_unlock;
                 }
+                RAT_DB_UPDATE(db);
                 break;
             case RAT_MOD_AID_ENABLE:
             case RAT_MOD_AID_DISABLE:
@@ -2044,15 +3038,15 @@ static int rat_rad_exec_module (struct rat_ctl_request *crq)
                 opt = rat_db_get_opt(db, crq->crq_mid, crq->crq_oid);
                 if (!opt) {
                     rat_rad_mf.mf_error("Unknown option!");
-                    goto exit_err_release;
+                    goto exit_err_unlock;
                 }
                 rat_rad_fill_mi_opt(db, opt, &mi);
                 RAT_MOD_MI_IN(&mi, 0);
                 if (rat_mod_rad_call_aid(&rat_rad_mf, &mi, crq->crq_mid,
-                                         crq->crq_aid) == RAT_OK) {
-                    rat_db_updated(db);
-                    goto exit_ok_release;
+                                         crq->crq_aid) != RAT_OK) {
+                    goto exit_err_unlock;
                 }
+                RAT_DB_UPDATE(db);
                 break;
             case RAT_MOD_AID_SET:
             case RAT_MOD_AID_ADD:
@@ -2060,34 +3054,30 @@ static int rat_rad_exec_module (struct rat_ctl_request *crq)
                 opt = rat_db_get_opt(db, crq->crq_mid, crq->crq_oid);
                 if (!opt) {
                     rat_rad_mf.mf_error("Unknown option!");
-                    goto exit_err_release;
+                    goto exit_err_unlock;
                 }
                 rat_rad_fill_mi_opt(db, opt, &mi);
                 if (rat_mod_rad_call_pid(&rat_rad_mf, &mi,
                                          crq->crq_mid, crq->crq_aid,
                                          crq->crq_pid, crq->crq_data,
-                                         sizeof(crq->crq_data)) == RAT_OK) {
-                    rat_db_updated(db);
-                    goto exit_ok_release;
+                                         sizeof(crq->crq_data)) != RAT_OK) {
+                    goto exit_err_unlock;
                 }
+                RAT_DB_UPDATE(db);
                 break;
             default:
                 rat_rad_mf.mf_error("Unknown action!");
                 break;
         }
+        RAT_DB_UNLOCK();                                            /* UNLOCK */
     }
-
-exit_err_release:
-    if (db)
-        db = rat_db_release(db);
-
-    return RAT_ERROR;
-
-exit_ok_release:
-    if (db)
-        db = rat_db_release(db);
-exit_ok:
     return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();
+
+exit_err:
+    return RAT_ERROR;
 }
 
 
@@ -2104,22 +3094,22 @@ static void rat_rad_ra_disable_all (void)
     struct rat_db *db;
     RAT_DEBUG_TRACE();
 
-    db = rat_db_grab_first();
-    while (db) {
+    RAT_DB_WRITELOCK();                                               /* LOCK */
+    for (db = rat_db_list; db; db = db->db_next) {
         switch (db->db_state) {
             case RAT_DB_STATE_FADEIN1:
             case RAT_DB_STATE_FADEIN2:
             case RAT_DB_STATE_FADEIN3:
             case RAT_DB_STATE_ENABLED:
                 db->db_state = RAT_DB_STATE_FADEOUT1;
-                rat_db_updated(db);
+                RAT_DB_UPDATE(db);
                 pthread_cond_signal(&db->db_worker_cond);
                 break;
             default:
                 break;
         }
-        db = rat_db_grab_next(db);
     }
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
 
     return;
 }
@@ -2133,15 +3123,12 @@ static void rat_rad_ra_disable_all (void)
 static void rat_rad_ra_join_workers (void)
 {
     struct rat_db *db;
-    pthread_t* tptr;
     RAT_DEBUG_TRACE();
 
-    db = rat_db_grab_first();
-    while (db) {
-        tptr = &db->db_worker_thread;
-        db = rat_db_grab_next(db);
-        pthread_join(*tptr, NULL);
-    }
+    RAT_DB_WRITELOCK();                                               /* LOCK */
+    for (db = rat_db_list; db; db = db->db_next)
+        pthread_join(db->db_worker_thread, NULL);
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
 
     return;
 }

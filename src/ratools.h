@@ -168,7 +168,10 @@ struct in6_pktinfo {
  * quantifier whilst the latter could be. Thus we define our own constant, which
  * also is a bit larger than current IFNAMSIZ definitions. Just to be sure :)
  */
+/** @{ */
 #define RAT_IFNAMELEN           23
+#define RAT_IFNAMESIZ           (RAT_IFNAMELEN + 1)
+/** @} */
 
 
 /* --- hardware addresses --------------------------------------------------- */
@@ -296,6 +299,7 @@ struct rat_prefix {
 #   define RAT_DEBUG_MESSAGE(...)                                           \
         do { } while (0)
 #endif /* RAT_DEBUG */
+/** @} */
 
 
 /**

@@ -69,6 +69,13 @@ static int rat_db_debug_lockcount = 0;
 /** @} */
 
 
+#define RAT_DB_UPDATE(db)                                                   \
+    do {                                                                    \
+        db->db_version++;                                                   \
+        db->db_updated = time(NULL);                                        \
+    } while (0)
+
+
 /* --- functions ------------------------------------------------------------ */
 
 
@@ -126,8 +133,10 @@ int rat_db_create (uint32_t ifindex)
 
     /* init db item */
     db->db_ifindex = ifindex;
-    if (pthread_mutex_init(&db->db_mutex, NULL))
-        goto exit_err_unlock_free;
+    db->db_ifstate = RAT_DB_IFSTATE_DOWN;
+    db->db_state = RAT_DB_STATE_DISABLED;
+    db->db_compiled = 0;
+    db->db_version = 1;
 
     /* add item to database */
     if (!rat_db_list) {
@@ -142,8 +151,7 @@ int rat_db_create (uint32_t ifindex)
     RAT_DB_UNLOCK();                                             /* UNLOCK DB */
     return RAT_OK;
 
-exit_err_unlock_free:
-    free(db);
+
 exit_err_unlock:
     RAT_DB_UNLOCK();                                             /* UNLOCK DB */
 exit_err:
@@ -187,9 +195,6 @@ int rat_db_destroy (uint32_t ifindex)
 
     RAT_DB_UNLOCK();                                             /* UNLOCK DB */
 
-    /* destroy interface elements */
-    pthread_mutex_destroy(&db->db_mutex);
-
     /* free space */
     free(db);
 
@@ -218,186 +223,42 @@ exit_err_unlock:
  */
 
 
-/**
- * Create a database entry for an interface
- * @param ifindex               interface index number
- *
- * @return Returns database entry, NULL on error
- */
-struct rat_db *rat_db_grab (uint32_t ifindex)
-{
-    struct rat_db *db = NULL;
-    RAT_DEBUG_TRACE();
-
-    if (!ifindex)
-        goto exit_err;
-
-    RAT_DB_READLOCK();                                             /* LOCK DB */
-
-    db = rat_db_find(ifindex);
-    if (!db)
-        goto exit_err_unlock;
-
-    if (pthread_mutex_lock(&db->db_mutex) != 0)
-        goto exit_err_unlock;
-
-    /*        _
-     *    _  / |   Caution!
-     *  _| |_| |   --------
-     * |_   _| |   Number of database readers increases here!
-     *   |_| |_|
-     */
-    return db;
-
-exit_err_unlock:
-    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
-exit_err:
-    return NULL;
-}
-
-
-/**
- * Grabs first database entry
- *
- * This is useful if we want to iterate through the whole database. E.g. on
- * special commands like `show all' or `dump all'.
- *
- * @return Returns database entry, NULL on error
- */
-struct rat_db *rat_db_grab_first (void)
-{
-    struct rat_db *db = NULL;
-    RAT_DEBUG_TRACE();
-
-    RAT_DB_READLOCK();                                             /* LOCK DB */
-
-    /* first entry in database requested */
-    db = rat_db_list;
-    if (!db)
-        goto exit_err_unlock;
-
-    if (pthread_mutex_lock(&db->db_mutex) != 0)
-        goto exit_err_unlock;
-
-    /*        _
-     *    _  / |   Caution!
-     *  _| |_| |   --------
-     * |_   _| |   Number of database readers increases here!
-     *   |_| |_|
-     */
-    return db;
-
-exit_err_unlock:
-    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
-    return NULL;
-}
-
-
-/**
- * Grasb next interface in database and releases the current one
- * @param db                    database entry
- *
- * This function automatically releases the last used database entry if end of
- * list was reached.
- *
- * @return Returns database entry, NULL on error
- */
-struct rat_db *rat_db_grab_next (struct rat_db *db)
-{
-    struct rat_db *next = NULL;
-    RAT_DEBUG_TRACE();
-
-    if (!db)
-        goto exit;
-
-    if (db->db_next) {
-        next = rat_db_grab(db->db_next->db_ifindex);
-    }
-    db = rat_db_release(db);
-
-exit:
-    return next;
-}
-
-
-/**
- * @brief Increase database entry version number
- *
- * @param db                    database entry
- */
-void rat_db_updated (struct rat_db *db)
-{
-    RAT_DEBUG_TRACE();
-
-    if (db) {
-        db->db_version++;
-        db->db_updated = time(NULL);
-    }
-
-    return;
-}
-
 
 /**
  * @brief Reset running database entry to fade-in state
  *
  * Call this function if fundamental interface configuration changes have
  * applied that require hosts in the network to catch up with them. E.g.
- * link-local address changes of the router.
+ * mtu changes of the interface.
  *
  * @param db                    database entry
  */
-void rat_db_refadein (struct rat_db *db)
+int rat_db_set_state_refadein (uint32_t ifindex)
 {
+    struct rat_db *db;
     RAT_DEBUG_TRACE();
 
+    RAT_DB_WRITELOCK();                                            /* LOCK DB */
+    db = rat_db_find(ifindex);
     if (!db)
-        goto exit;
-
+        goto exit_err_unlock;
     switch (db->db_state) {
         case RAT_DB_STATE_FADEIN2:
         case RAT_DB_STATE_FADEIN3:
         case RAT_DB_STATE_ENABLED:
             db->db_state = RAT_DB_STATE_FADEIN1;
-            pthread_cond_signal(&db->db_worker_cond);
             break;
         default:
             break;
     }
-
-exit:
-    return;
-}
-
-/**
- * Release a database entry
- * @param db                    database entry
- *
- * @return Returns NULL
- */
-struct rat_db *rat_db_release (struct rat_db *db)
-{
-    RAT_DEBUG_TRACE();
-
-    if (!db)
-        goto exit;
-
-    if (pthread_mutex_unlock(&db->db_mutex) != 0) {
-        rat_log_err("Failed to unlock a mutex on interface `%" PRIu16 "'!",
-                    db->db_ifindex);
-        goto exit;
-    }
-
-    /*        _
-     *       / |   Caution!
-     *  _____| |   --------
-     * |_____| |   Number of database readers decreases here!
-     *       |_|
-     */
+    RAT_DB_UPDATE(db);
     RAT_DB_UNLOCK();                                             /* UNLOCK DB */
 
-exit:
-    return NULL;
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
 }
 
 
@@ -542,3 +403,456 @@ int rat_db_del_opt (struct rat_db *db, uint16_t mid, uint16_t oid)
 exit_err:
     return RAT_ERROR;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+enum rat_db_ifstate rat_db_get_ifstate (uint32_t ifindex)
+{
+    struct rat_db *db;
+    enum rat_db_ifstate ifstate = RAT_DB_IFSTATE_DOWN;
+
+    RAT_DB_READLOCK();                                             /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (db)
+        ifstate = db->db_ifstate;
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return ifstate;
+}
+
+
+int rat_db_set_ifstate (uint32_t ifindex, enum rat_db_ifstate ifstate)
+{
+    struct rat_db *db;
+
+    RAT_DB_WRITELOCK();                                            /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
+    db->db_ifstate = ifstate;
+    RAT_DB_UPDATE(db);
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
+}
+
+
+
+
+int rat_db_get_ifname (uint32_t ifindex, char *ifname, size_t len)
+{
+    struct rat_db *db;
+
+    RAT_DB_READLOCK();                                             /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
+
+    memset(ifname, 0x0, len);
+    strncpy(ifname, db->db_ifname, len - 1);
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
+}
+
+
+int rat_db_set_ifname (uint32_t ifindex, char *ifname)
+{
+    struct rat_db *db;
+
+    RAT_DB_WRITELOCK();                                            /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
+    memset(db->db_ifname, 0x0, sizeof(db->db_ifname));
+    strncpy(db->db_ifname, ifname, sizeof(db->db_ifname) - 1);
+    RAT_DB_UPDATE(db);
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
+}
+
+
+
+
+
+
+
+uint32_t rat_db_get_mtu (uint32_t ifindex)
+{
+    struct rat_db *db;
+    uint32_t mtu = 0;
+
+    RAT_DB_READLOCK();                                             /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (db)
+        mtu = db->db_mtu;
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return mtu;
+}
+
+int rat_db_set_mtu (uint32_t ifindex, uint32_t mtu)
+{
+    struct rat_db *db;
+
+    RAT_DB_WRITELOCK();                                            /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
+    db->db_mtu = mtu;
+    RAT_DB_UPDATE(db);
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
+}
+
+
+
+
+
+
+
+int rat_db_get_hwaddr (uint32_t ifindex, struct rat_hwaddr *hwa)
+{
+    struct rat_db *db;
+
+    RAT_DB_READLOCK();                                             /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
+    memcpy(hwa, &db->db_hwaddr, sizeof(struct rat_hwaddr));
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
+}
+
+
+int rat_db_set_hwaddr (uint32_t ifindex, struct rat_hwaddr *hwa)
+{
+    struct rat_db *db;
+
+    RAT_DB_WRITELOCK();                                            /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
+    memcpy(&db->db_hwaddr, hwa, sizeof(db->db_hwaddr));
+    RAT_DB_UPDATE(db);
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
+}
+
+
+int rat_db_get_lladdr (uint32_t ifindex, struct in6_addr *lladdr)
+{
+    struct rat_db *db;
+
+    RAT_DB_READLOCK();                                             /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
+    memcpy(lladdr, &db->db_lladdr, sizeof(struct in6_addr));
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
+}
+
+
+int rat_db_set_lladdr (uint32_t ifindex, struct in6_addr *lladdr)
+{
+    struct rat_db *db;
+
+    RAT_DB_WRITELOCK();                                            /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
+    memcpy(&db->db_lladdr, lladdr, sizeof(db->db_lladdr));
+    RAT_DB_UPDATE(db);
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
+}
+
+
+
+enum rat_db_state rat_db_get_state (uint32_t ifindex)
+{
+    struct rat_db *db;
+    enum rat_db_state state = RAT_DB_STATE_DESTROYED;
+
+    RAT_DB_READLOCK();                                             /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (db)
+        state = db->db_state;
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return state;
+}
+
+
+int rat_db_set_state (uint32_t ifindex, enum rat_db_state state)
+{
+    struct rat_db *db;
+
+    RAT_DB_WRITELOCK();                                            /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
+    db->db_state = state;
+    RAT_DB_UPDATE(db);
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
+}
+
+
+
+useconds_t rat_db_get_delay (uint32_t ifindex)
+{
+    struct rat_db *db;
+    useconds_t delay = 0;
+
+    RAT_DB_READLOCK();                                             /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (db)
+        delay = db->db_delay;
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return delay;
+}
+
+int rat_db_set_delay (uint32_t ifindex, useconds_t delay)
+{
+    struct rat_db *db;
+
+    RAT_DB_WRITELOCK();                                            /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
+    db->db_delay = delay;
+    RAT_DB_UPDATE(db);
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
+}
+
+
+void rat_db_get_ra_private (uint32_t ifindex, void *private)
+{
+    struct rat_db *db;
+
+    private = NULL;
+
+    RAT_DB_READLOCK();                                             /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (db)
+        private = db->db_ra_private;
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return;
+}
+
+
+void rat_db_get_ra_rawdata (uint32_t ifindex, void *rawdata, uint16_t *rawlen)
+{
+    struct rat_db *db;
+
+    rawdata = NULL;
+    *rawlen = 0;
+
+    RAT_DB_READLOCK();                                             /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (db) {
+        rawdata = db->db_ra_rawdata;
+        rawlen = &db->db_ra_rawlen;
+    }
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return;
+}
+
+static uint32_t __rat_db_get_advint (uint32_t ifindex, int max)
+{
+    struct rat_db *db;
+    uint32_t advint = 0;
+
+    RAT_DB_READLOCK();                                             /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (db) {
+        if (max)
+            advint = db->db_maxadvint;
+        else
+            advint = db->db_minadvint;
+    }
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return advint;
+}
+
+uint32_t rat_db_get_maxadvint (uint32_t ifindex)
+{
+    return __rat_db_get_advint(ifindex, 1);
+}
+
+uint32_t rat_db_get_minadvint (uint32_t ifindex)
+{
+    return __rat_db_get_advint(ifindex, 0);
+}
+
+static int __rat_db_set_advint (uint32_t ifindex, uint32_t advint, int max)
+{
+    struct rat_db *db;
+
+    RAT_DB_WRITELOCK();                                            /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
+    if (max)
+        db->db_maxadvint = advint;
+    else
+        db->db_minadvint = advint;
+    RAT_DB_UPDATE(db);
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
+}
+
+int rat_db_set_maxadvint (uint32_t ifindex, uint32_t advint)
+{
+    return __rat_db_set_advint(ifindex, advint, 1);
+}
+
+int rat_db_set_minadvint (uint32_t ifindex, uint32_t advint)
+{
+    return __rat_db_set_advint(ifindex, advint, 0);
+}
+
+
+
+
+int rat_db_signal_worker (uint32_t ifindex)
+{
+    struct rat_db *db;
+
+    RAT_DB_WRITELOCK();                                            /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
+    pthread_cond_signal(&db->db_worker_cond);
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
+}
+
+
+int rat_db_exists (uint32_t ifindex)
+{
+    int ret = 0;
+
+    RAT_DB_READLOCK();                                             /* LOCK DB */
+    if (rat_db_find(ifindex))
+        ret = 1;
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return ret;
+}
+
+int rat_db_is_compiled (uint32_t ifindex)
+{
+    int ret = 0;
+    struct rat_db *db;
+
+    RAT_DB_READLOCK();
+    db = rat_db_find(ifindex);
+    if (db && db->db_compiled == db->db_version)
+        ret = 1;
+    RAT_DB_UNLOCK();
+
+    return ret;
+}
+
+int rat_db_set_compiled (uint32_t ifindex, uint32_t version)
+{
+    struct rat_db *db;
+
+    RAT_DB_WRITELOCK();                                            /* LOCK DB */
+    db = rat_db_find(ifindex);
+    if (!db)
+        goto exit_err_unlock;
+    db->db_compiled = db->db_version;
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+
+    return RAT_OK;
+
+exit_err_unlock:
+    RAT_DB_UNLOCK();                                             /* UNLOCK DB */
+    return RAT_ERROR;
+}
+

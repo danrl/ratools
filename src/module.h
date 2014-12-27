@@ -79,7 +79,7 @@
  * @brief Module instance data
  *
  * There are some information we have to leak out to modules to make sure they
- * an test their values for RFC compliance and to produce meaningful error
+ * can test their values for RFC compliance and to produce meaningful error
  * messages.
  */
 struct rat_mod_instance {
@@ -107,7 +107,7 @@ struct rat_mod_instance {
     /** Indicate that RA is currently fading out */
     uint16_t                    mi_fadingout;
     /** Interface MTU */
-    uint32_t                    mi_linkmtu;
+    uint32_t                    mi_mtu;
     /** Interface hardware address */
     struct rat_hwaddr           mi_hwaddr;
     /** @} */

@@ -64,10 +64,8 @@ ractl:               \
 rad:                 \
 	library.o        \
 	log.o            \
-	database.o       \
 	module.o         \
 	multicast.o      \
-	netlink.o        \
 	packetset.o      \
 	ra.o             \
 	opt_mtu.o        \

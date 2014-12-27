@@ -96,7 +96,7 @@ static int rat_opt_mtu_compile (struct rat_mod_instance *mi)
     raw->nd_opt_mtu_len = 1;
     raw->nd_opt_mtu_reserved = 0;
     if (mtu->mtu_autodetect)
-        raw->nd_opt_mtu_mtu = htonl(mi->mi_linkmtu);
+        raw->nd_opt_mtu_mtu = htonl(mi->mi_mtu);
     else
         raw->nd_opt_mtu_mtu = htonl(mtu->mtu_linkmtu);
 
@@ -138,7 +138,7 @@ static int rat_opt_mtu_show (struct rat_mod_functions *mf,
 
     mf->mf_param(mi->mi_in, "Link-MTU");
     if (mtu->mtu_autodetect) {
-        mf->mf_value("%" PRIu32, mi->mi_linkmtu);
+        mf->mf_value("%" PRIu32, mi->mi_mtu);
         mf->mf_info(NULL);
     } else {
         mf->mf_value("%" PRIu32, mtu->mtu_linkmtu);

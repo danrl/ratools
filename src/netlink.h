@@ -50,7 +50,7 @@ struct rat_nl_rtreq {
 };
 
 
-extern int rat_nl_init_db (struct rat_db *);
+extern int rat_nl_init_db (uint32_t);
 extern void *rat_nl_listener (void *);
 
 

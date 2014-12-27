@@ -33,6 +33,14 @@
 
 /* --- types ---------------------------------------------------------------- */
 
+/**
+ * Interface state (up/down)
+ */
+enum rat_db_ifstate {
+    RAT_DB_IFSTATE_DOWN,
+    RAT_DB_IFSTATE_UP
+};
+
 
 /**
  * Database metadata of ICMPv6 option
@@ -147,8 +155,6 @@ struct rat_db {
     struct rat_db               *db_next;
     /** Interface index */
     uint32_t                    db_ifindex;
-    /** Mutual exclusion lock */
-    pthread_mutex_t             db_mutex;
 
     /** @} */
     /** @{ */
@@ -176,11 +182,9 @@ struct rat_db {
     useconds_t                  db_delay;
 
     /** Interface up/down state */
-    int                         db_ifup;
-    /** Interface forwarding enabled state */
-    int                         db_forwarding;
+    int                         db_ifstate;
     /** Interface asciiz name */
-    char                        db_ifname[RAT_IFNAMELEN + 1];
+    char                        db_ifname[RAT_IFNAMESIZ];
     /** Interface maximum transmission unit */
     uint32_t                    db_mtu;
     /** Interface hardware address */
@@ -227,12 +231,36 @@ struct rat_db {
 extern int rat_db_create (uint32_t);
 extern int rat_db_destroy (uint32_t);
 
-extern struct rat_db *rat_db_grab (uint32_t);
-extern struct rat_db *rat_db_grab_first (void);
-extern struct rat_db *rat_db_grab_next (struct rat_db *);
-extern void rat_db_updated (struct rat_db *);
-extern void rat_db_refadein (struct rat_db *);
-extern struct rat_db *rat_db_release (struct rat_db *);
+
+extern int rat_db_set_state_refadein (uint32_t);
+
+extern enum rat_db_ifstate rat_db_get_ifstate (uint32_t);
+extern int rat_db_set_ifstate (uint32_t, enum rat_db_ifstate);
+extern int rat_db_get_ifname (uint32_t, char *, size_t);
+extern int rat_db_set_ifname (uint32_t, char *);
+extern uint32_t rat_db_get_mtu (uint32_t);
+extern int rat_db_set_mtu (uint32_t, uint32_t);
+extern int rat_db_get_hwaddr (uint32_t, struct rat_hwaddr *);
+extern int rat_db_set_hwaddr (uint32_t, struct rat_hwaddr *);
+extern int rat_db_get_lladdr (uint32_t, struct in6_addr *);
+extern int rat_db_set_lladdr (uint32_t, struct in6_addr *);
+extern enum rat_db_state rat_db_get_state (uint32_t);
+extern int rat_db_set_state (uint32_t, enum rat_db_state);
+extern useconds_t rat_db_get_delay (uint32_t);
+extern int rat_db_set_delay (uint32_t, useconds_t);
+extern void rat_db_get_ra_private (uint32_t, void *);
+extern void rat_db_get_ra_rawdata (uint32_t, void *, uint16_t *);
+extern uint32_t rat_db_get_maxadvint (uint32_t);
+extern uint32_t rat_db_get_minadvint (uint32_t);
+extern int rat_db_set_maxadvint (uint32_t, uint32_t);
+extern int rat_db_set_minadvint (uint32_t, uint32_t);
+
+
+
+extern int rat_db_exists (uint32_t);
+extern int rat_db_is_compiled (uint32_t);
+
+extern int rat_db_signal_worker (uint32_t);
 
 extern void rat_db_debug_opt (struct rat_db_opt *);
 

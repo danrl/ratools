@@ -38,33 +38,34 @@
 /**
  * @brief Parse rtnetlink attributes of RTM_*LINK message
  *
- * Updates database entry if a value has changed.
+ * Updates database if a value has changed.
  *
- * @param db                    database entry
+ * @param ifindex               interface index
  * @param nh                    netlink message header
  */
-static void __rat_nl_parse_link_rtattr (struct rat_db *db, struct nlmsghdr *nh)
+static void __rat_nl_parse_link_rtattr (uint32_t ifindex, struct nlmsghdr *nh)
 {
     struct ifinfomsg *ifi = (struct ifinfomsg *) NLMSG_DATA(nh);
     unsigned int rtlen, mtu;
-    int ifup;
+    enum rat_db_ifstate ifstate;
+    char ifname[RAT_IFNAMELEN + 1];
     struct rtattr *rtattr;
-    struct rat_hwaddr hwa;
-    char buffer[RAT_HWADDR_STRSIZ];
+    struct rat_hwaddr hwanl, hwadb;
+    char hwaddrstr[RAT_HWADDR_STRSIZ];
     RAT_DEBUG_TRACE();
 
     /* interface up/down state */
-    ifup = (ifi->ifi_flags & IFF_UP) && (ifi->ifi_flags & IFF_RUNNING);
-    if (db->db_ifup != ifup) {
-        db->db_ifup = ifup;
-
-        rat_log_nfo("Netlink: Interface %" PRIu32 ": New state `%d'.",
-                    RAT_DB_IFINDEX(db), db->db_ifup);
-        rat_db_updated(db);
-
-        /* if interface went down, signal worker! */
-        if (!db->db_ifup)
-            pthread_cond_signal(&db->db_worker_cond);
+    if ((ifi->ifi_flags & IFF_UP) && (ifi->ifi_flags & IFF_RUNNING))
+        ifstate = RAT_DB_IFSTATE_UP;
+    else
+        ifstate = RAT_DB_IFSTATE_DOWN;
+    if (rat_db_get_ifstate(ifindex) != ifstate) {
+        rat_db_set_ifstate(ifindex, ifstate);
+        rat_log_nfo("Netlink: Interface %" PRIu32 ": New state `%s'.", ifindex,
+                    ifstate == RAT_DB_IFSTATE_UP ? "up" : "down");
+        /* signal worker if interface went down */
+        if (ifstate == RAT_DB_IFSTATE_DOWN)
+            rat_db_signal_worker(ifindex);
     }
 
     rtlen = nh->nlmsg_len - NLMSG_LENGTH(sizeof(*ifi));
@@ -74,48 +75,45 @@ static void __rat_nl_parse_link_rtattr (struct rat_db *db, struct nlmsghdr *nh)
 
             case IFLA_IFNAME:
                 /* interface name */
-                if (strncmp(db->db_ifname, RTA_DATA(rtattr),
-                            sizeof(db->db_ifname)) == 0)
+                rat_db_get_ifname(ifindex, ifname, sizeof(ifname));
+                if (strncmp(ifname, RTA_DATA(rtattr), sizeof(ifname)) == 0)
                     break;
-
-                strncpy(db->db_ifname, RTA_DATA(rtattr), sizeof(db->db_ifname));
-
+                rat_db_set_ifname(ifindex, RTA_DATA(rtattr));
                 rat_log_nfo("Netlink: Interface %" PRIu32 ": New name `%s'.",
-                            RAT_DB_IFINDEX(db), db->db_ifname);
-                rat_db_updated(db);
+                            ifindex, RTA_DATA(rtattr));
                 break;
 
             case IFLA_MTU:
                 /* MTU */
-                mtu = *((unsigned int *) RTA_DATA(rtattr));
-                if (db->db_mtu == mtu)
+                mtu =  (uint32_t) (*((unsigned int *) RTA_DATA(rtattr)));
+                if (rat_db_get_mtu(ifindex) == mtu)
                     break;
-
-                db->db_mtu = (uint32_t) (*((unsigned int *) RTA_DATA(rtattr)));
-
+                rat_db_set_mtu(ifindex, mtu);
+                rat_db_set_state_refadein(ifindex);
+                rat_db_signal_worker(ifindex);
                 rat_log_nfo("Netlink: Interface %" PRIu32 ": New MTU `%u'.",
-                            RAT_DB_IFINDEX(db), db->db_mtu);
-                rat_db_updated(db);
-                rat_db_refadein(db);
+                            ifindex, mtu);
                 break;
 
             case IFLA_ADDRESS:
                 /* hardware address */
-                memset(&hwa, 0x0, sizeof(hwa));
-                hwa.hwa_len = (uint8_t) MIN(RTA_PAYLOAD(rtattr),
-                                            sizeof(hwa.hwa_addr));
-                memcpy(hwa.hwa_addr, RTA_DATA(rtattr), hwa.hwa_len);
-
-                if (memcmp(&db->db_hwaddr, &hwa, sizeof(hwa)) == 0)
+                /* hardware address proviled by netlink */
+                memset(&hwanl, 0x0, sizeof(hwanl));
+                hwanl.hwa_len = (uint8_t) MIN(RTA_PAYLOAD(rtattr),
+                                              sizeof(hwanl.hwa_addr));
+                memcpy(hwanl.hwa_addr, RTA_DATA(rtattr), hwanl.hwa_len);
+                /* hardware address from database */
+                rat_db_get_hwaddr(ifindex, &hwadb);
+                /* compare */
+                if (memcmp(&hwadb, &hwanl, sizeof(struct rat_hwaddr)) == 0)
                     break;
-                memcpy(&db->db_hwaddr, &hwa, sizeof(db->db_hwaddr));
-
-                rat_lib_hwaddr_to_str(buffer, sizeof(buffer), &hwa);
+                rat_db_set_hwaddr(ifindex, &hwanl);
+                rat_db_set_state_refadein(ifindex);
+                rat_db_signal_worker(ifindex);
+                rat_lib_hwaddr_to_str(hwaddrstr, sizeof(hwaddrstr), &hwanl);
                 rat_log_nfo("Netlink: Interface %" PRIu32 ": " \
                             "New hardware address `%s'.",
-                            RAT_DB_IFINDEX(db), buffer);
-                rat_db_updated(db);
-                rat_db_refadein(db);
+                            ifindex, hwaddrstr);
                 break;
 
             default:
@@ -131,7 +129,7 @@ static void __rat_nl_parse_link_rtattr (struct rat_db *db, struct nlmsghdr *nh)
 /**
  * @brief Parse rtnetlink RTM_*LINK message
  *
- * Updates database entry if a value has changed.
+ * Updates database if a value has changed.
  *
  * @param nh                    netlink message header
  */
@@ -139,7 +137,6 @@ static void __rat_nl_parse_link (struct nlmsghdr *nh)
 {
     struct ifinfomsg *ifi = (struct ifinfomsg *) NLMSG_DATA(nh);
     uint32_t ifindex;
-    struct rat_db *db;
     RAT_DEBUG_TRACE();
 
     if (ifi->ifi_index < 1) {
@@ -148,15 +145,13 @@ static void __rat_nl_parse_link (struct nlmsghdr *nh)
     }
     ifindex = ifi->ifi_index;
 
-    db = rat_db_grab(ifindex);
-    if (!db) {
+    if (!rat_db_exists(ifindex)) {
         rat_log_nfo("Netlink: Interface %" PRIu32 ": Ignored.", ifindex);
         goto exit;
     }
 
-    __rat_nl_parse_link_rtattr(db, nh);
 
-    db = rat_db_release(db);
+    __rat_nl_parse_link_rtattr(ifindex, nh);
 
 exit:
     return;
@@ -171,12 +166,13 @@ exit:
  * @param db                    database entry
  * @param nh                    netlink message header
  */
-static void __rat_nl_parse_addr_rtattr (struct rat_db *db, struct nlmsghdr *nh)
+static void __rat_nl_parse_addr_rtattr (uint32_t ifindex, struct nlmsghdr *nh)
 {
     struct ifaddrmsg *ifa = (struct ifaddrmsg *) NLMSG_DATA(nh);
     unsigned int rtlen;
     struct rtattr *rtattr;
-    char buffer[RAT_6ADDR_STRSIZ];
+    struct in6_addr lladdr;
+    char addrstr[RAT_6ADDR_STRSIZ];
     RAT_DEBUG_TRACE();
 
     rtlen = IFA_PAYLOAD(nh);
@@ -195,19 +191,17 @@ static void __rat_nl_parse_addr_rtattr (struct rat_db *db, struct nlmsghdr *nh)
             case IFA_LOCAL:
                 if (!rat_lib_6addr_is_linklocal(RTA_DATA(rtattr)))
                     break;
-                if (memcmp(&db->db_lladdr, RTA_DATA(rtattr),
-                           sizeof(db->db_lladdr)) == 0)
+                rat_db_get_lladdr(ifindex, &lladdr);
+                if (memcmp(&lladdr, RTA_DATA(rtattr), sizeof(lladdr)) == 0)
                     break;
-
-                memcpy(&db->db_lladdr, RTA_DATA(rtattr),
-                       sizeof(db->db_lladdr));
-
-                rat_lib_6addr_to_str(buffer, sizeof(buffer), &db->db_lladdr);
+                rat_db_set_lladdr(ifindex, RTA_DATA(rtattr));
+                rat_db_set_state_refadein(ifindex);
+                rat_db_signal_worker(ifindex);
+                rat_lib_6addr_to_str(addrstr, sizeof(addrstr),
+                                     RTA_DATA(rtattr));
                 rat_log_nfo("Netlink: Interface %" PRIu32 ": " \
                             "New link-local address `%s'.",
-                            RAT_DB_IFINDEX(db), buffer);
-                rat_db_updated(db);
-                rat_db_refadein(db);
+                            ifindex, addrstr);
                 break;
 
             default:
@@ -231,7 +225,6 @@ static void __rat_nl_parse_addr (struct nlmsghdr *nh)
 {
     struct ifaddrmsg *ifa = (struct ifaddrmsg *) NLMSG_DATA(nh);
     uint32_t ifindex;
-    struct rat_db *db;
     RAT_DEBUG_TRACE();
 
     if (ifa->ifa_index < 1) {
@@ -240,18 +233,15 @@ static void __rat_nl_parse_addr (struct nlmsghdr *nh)
     }
     ifindex = ifa->ifa_index;
 
-    db = rat_db_grab(ifindex);
-    if (!db) {
+    if (!rat_db_exists(ifindex)) {
         rat_log_nfo("Netlink: Interface %" PRIu32 ": Ignored.", ifindex);
         goto exit;
     }
 
     if (nh->nlmsg_type == RTM_DELADDR)
-        rat_nl_init_db(db);
+        rat_nl_init_db(ifindex);
     else
-        __rat_nl_parse_addr_rtattr(db, nh);
-
-    db = rat_db_release(db);
+        __rat_nl_parse_addr_rtattr(ifindex, nh);
 
 exit:
     return;
@@ -259,17 +249,17 @@ exit:
 
 
 /**
- * @brief Initialize interface data of database entry
+ * @brief Initialiy fetch interface data
  *
  * The purpose of this function is to fetch interface state, MTU value, hardware
  * address and link-local address of an interface. A netlink listener thread
  * will update the initial information over time.
  *
- * @param db                    database entry
+ * @param ifindex               interface index
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
  */
-int rat_nl_init_db (struct rat_db *db)
+int rat_nl_init_db (uint32_t ifindex)
 {
     RAT_DEBUG_TRACE();
 
@@ -321,7 +311,7 @@ int rat_nl_init_db (struct rat_db *db)
     req.req_nlmsg.nlmsg_seq = ++seq;
     req.req_nlmsg.nlmsg_pid = la.nl_pid;
     req.req_ifi.ifi_family = AF_INET6;
-    req.req_ifi.ifi_index = (int) RAT_DB_IFINDEX(db);
+    req.req_ifi.ifi_index = (int) ifindex;
 
     /* LINK LAYER: iovec */
     memset(&iov, 0x0, sizeof(iov));
@@ -364,10 +354,10 @@ int rat_nl_init_db (struct rat_db *db)
             /* skip interfaces not matching the requested ifindex */
             ifi = (struct ifinfomsg *) NLMSG_DATA(nh);
             if (ifi->ifi_index < 1 ||
-                ((uint32_t) ifi->ifi_index) != db->db_ifindex)
+                ((uint32_t) ifi->ifi_index) != ifindex)
                 continue;
 
-            __rat_nl_parse_link_rtattr(db, nh);
+            __rat_nl_parse_link_rtattr(ifindex, nh);
 
         }
     } while (len);
@@ -408,7 +398,7 @@ int rat_nl_init_db (struct rat_db *db)
     req.req_nlmsg.nlmsg_pid = la.nl_pid;
     req.req_nlmsg.nlmsg_flags = NLM_F_REQUEST;
     req.req_ifa.ifa_family = AF_INET6;
-    req.req_ifa.ifa_index = (int) RAT_DB_IFINDEX(db);
+    req.req_ifa.ifa_index = ifindex;
 
     /* NETWORK LAYER: iovec */
     memset(&iov, 0x0, sizeof(iov));
@@ -451,10 +441,10 @@ int rat_nl_init_db (struct rat_db *db)
             /* skip interfaces not matching the requested ifindex */
             ifa = (struct ifaddrmsg *) NLMSG_DATA(nh);
             if (ifa->ifa_index < 1 ||
-                ((uint32_t) ifa->ifa_index) != db->db_ifindex)
+                ((uint32_t) ifa->ifa_index) != ifindex)
                 continue;
 
-            __rat_nl_parse_addr_rtattr(db, nh);
+            __rat_nl_parse_addr_rtattr(ifindex, nh);
 
         }
     } while (len);
