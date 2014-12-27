@@ -3133,10 +3133,12 @@ static void rat_rad_ra_join_workers (void)
     struct rat_db *db;
     RAT_DEBUG_TRACE();
 
-    RAT_DB_WRITELOCK();                                               /* LOCK */
+    /*
+     * We do NOT lock the database here to avoid a deadlock. There is nothing
+     * to serialize anymore anyway
+     */
     for (db = rat_db_list; db; db = db->db_next)
-        pthread_join(db->db_worker_thread, NULL);
-    RAT_DB_UNLOCK();                                                /* UNLOCK */
+        pthread_join(db->db_worker_thread, NULL);                                               /* UNLOCK */
 
     return;
 }
