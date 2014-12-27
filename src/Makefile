@@ -14,7 +14,7 @@ CFLAGS      += $(shell echo $$CFLAGS)
 # debug is slow but helpful during development
 CDEFS      += -DRAT_DEBUG
 # tracing is slow and spams the logs. use with care!
-CDEFS      += -DRAT_DEBUG_TRACING
+#CDEFS      += -DRAT_DEBUG_TRACING
 
 LDFLAGS      = $(shell echo $$LDFLAGS)
 
