@@ -2389,15 +2389,16 @@ static int rat_rad_ra_showall (void)
     struct rat_db *db;
     RAT_DEBUG_TRACE();
 
+
+    RAT_DB_READLOCK();                                                /* LOCK */
     if (rat_db_list) {
-        RAT_DB_READLOCK();                                            /* LOCK */
         for (db = rat_db_list; db; db = db->db_next)
             __rat_rad_ra_show(db);
-        RAT_DB_UNLOCK();                                            /* UNLOCK */
     } else {
         rat_rad_mf.mf_error("No Router Advertisement configured!");
         return RAT_ERROR;
     }
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
 
     return RAT_OK;
 }
