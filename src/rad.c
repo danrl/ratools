@@ -88,7 +88,7 @@ static int rat_db_debug_lockcount = 0;
 #define RAT_DB_READLOCK()                                                   \
     do {                                                                    \
         RAT_DEBUG_MESSAGE("Readlock: before=%d", rat_db_debug_lockcount);   \
-        pthread_rwlock_wrlock(&rat_db_lock);                                \
+        pthread_rwlock_rdlock(&rat_db_lock);                                \
         RAT_DEBUG_MESSAGE("Readlock: after=%d", ++rat_db_debug_lockcount);  \
     } while (0)
 #define RAT_DB_WRITELOCK()                                                  \
@@ -100,7 +100,7 @@ static int rat_db_debug_lockcount = 0;
 #define RAT_DB_UNLOCK()                                                     \
     do {                                                                    \
         RAT_DEBUG_MESSAGE("Unlock: before=%d", rat_db_debug_lockcount);     \
-        pthread_rwlock_rdlock(&rat_db_lock);                                \
+        pthread_rwlock_unlock(&rat_db_lock);                                \
         RAT_DEBUG_MESSAGE("Unlock: after=%d", --rat_db_debug_lockcount);    \
     } while (0)
 /** @} */
@@ -1910,6 +1910,8 @@ static void *rat_rad_worker (void *ptr)
              * TODO: describe why this is ok here and how this does not void the
              * locking
              */
+            RAT_DEBUG_MESSAGE("Worker: Interface %" PRIu32 ": " \
+                              "Going to sleep...", ifindex);
             pthread_cond_timedwait(&db->db_worker_cond, &db->db_worker_mutex,
                                    &db->db_worker_next);
             /*   ____                 _         _       _     _   _
@@ -1919,6 +1921,8 @@ static void *rat_rad_worker (void *ptr)
              *  \____|\___/ \___/ \__,_| |_| |_|_|\__, |_| |_|\__(_)
              *                                    |___/sweet prince!
              */
+            RAT_DEBUG_MESSAGE("Worker: Interface %" PRIu32 ": Woke up!",
+                              ifindex);
 
             RAT_DB_WRITELOCK();                                       /* LOCK */
             db = rat_db_find(ifindex);
@@ -1995,6 +1999,7 @@ static void *rat_rad_worker (void *ptr)
             break;
         case RAT_DB_STATE_FADEOUT3:
             db->db_state = RAT_DB_STATE_DISABLED;
+            RAT_DB_UPDATE(db);
             goto exit_unlock;
             break;
         default:
@@ -2564,8 +2569,11 @@ static int rat_rad_ra_enable (uint32_t ifindex)
 
     /* create worker thread for unsolicited RAs */
     if (pthread_create(&db->db_worker_thread, &db->db_worker_attr,
-                       rat_rad_worker, (void *) &db->db_ifindex))
+                       rat_rad_worker, (void *) &db->db_ifindex)) {
+        rat_log_wrn("Interface %" PRIu32 ": Error starting worker thread!",
+                          ifindex);
         goto exit_err_unlock;
+    }
 
     RAT_DB_UNLOCK();                                                /* UNLOCK */
 
@@ -3394,14 +3402,16 @@ int main (int argc, char *argv[])
         rat_log_err("Could not unlink `%s': %s!", srvsa.sun_path,
                     strerror(errno));
 
-    /* shutdown helper threads */
+    /* signal shutdown to helper threads */
     pthread_kill(nl_thread, SIGINT);
     pthread_kill(rs_thread, SIGINT);
-    pthread_join(nl_thread, NULL);
-    pthread_join(rs_thread, NULL);
 
     /* disable all RAs */
     rat_rad_ra_disable_all();
+
+    /* wait threads to finish */
+    pthread_join(nl_thread, NULL);
+    pthread_join(rs_thread, NULL);
     rat_rad_ra_join_workers();
 
     /* close RS listening and RA sending socket */
