@@ -2396,11 +2396,15 @@ static int rat_rad_ra_showall (void)
             __rat_rad_ra_show(db);
     } else {
         rat_rad_mf.mf_error("No Router Advertisement configured!");
-        return RAT_ERROR;
+        goto exit_err_unlock;
     }
     RAT_DB_UNLOCK();                                                /* UNLOCK */
 
     return RAT_OK;
+
+ exit_err_unlock:
+    RAT_DB_UNLOCK();
+    return RAT_ERROR;
 }
 
 
