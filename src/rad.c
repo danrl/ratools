@@ -2027,7 +2027,7 @@ exit_unlock:
 /**
  * @brief Destroy RA
  *
- * @param db                    database entry
+ * @param ifindex               interface index
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
  */
@@ -2357,6 +2357,13 @@ static int __rat_rad_ra_show (struct rat_db *db)
 }
 
 
+/**
+ * @brief Show RA
+ *
+ * @param ifindex               interface index
+ *
+ * @return Returns RAT_ERROR on error, RAT_OK otherwise.
+ */
 static int rat_rad_ra_show (uint32_t ifindex)
 {
     struct rat_db *db;
@@ -2374,7 +2381,7 @@ static int rat_rad_ra_show (uint32_t ifindex)
 /**
  * @brief Shows all RA in database
  *
- * @return Returns RAT_ERROR on error, RAT_OK otherwise
+ * @return Returns RAT_ERROR on error, RAT_OK otherwise.
  */
 static int rat_rad_ra_showall (void)
 {
@@ -2408,7 +2415,7 @@ static int rat_rad_ra_showall (void)
  *
  * @param db                    database entry
  *
- * @return Returns RAT_ERROR on error, RAT_OK otherwise
+ * @return Returns RAT_ERROR on error, RAT_OK otherwise.
  *
  *         /'\
  *        /   \      Caution!
@@ -2471,6 +2478,13 @@ exit_ret:
 }
 
 
+/**
+ * @brief Dump RA
+ *
+ * @param ifindex               interface index
+ *
+ * @return Returns RAT_ERROR on error, RAT_OK otherwise.
+ */
 static int rat_rad_ra_dump (uint32_t ifindex)
 {
     struct rat_db *db;
@@ -2495,24 +2509,29 @@ static int rat_rad_ra_dumpall (void)
     struct rat_db *db;
     RAT_DEBUG_TRACE();
 
+
+    RAT_DB_READLOCK();                                                /* LOCK */
     if (rat_db_list) {
-        RAT_DB_READLOCK();                                            /* LOCK */
         for (db = rat_db_list; db; db = db->db_next)
             __rat_rad_ra_dump(db);
-        RAT_DB_UNLOCK();                                            /* UNLOCK */
     } else {
         rat_rad_mf.mf_error("No Router Advertisement configured!");
-        return RAT_ERROR;
+        goto exit_err_unlock;
     }
+    RAT_DB_UNLOCK();                                                /* UNLOCK */
 
     return RAT_OK;
+
+ exit_err_unlock:
+    RAT_DB_UNLOCK();
+    return RAT_ERROR;
 }
 
 
 /**
  * @brief Enable RA
  *
- * @param db                    database entry
+ * @param ifindex               interface index
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
  */
@@ -2585,7 +2604,7 @@ exit_err_unlock:
 /**
  * @brief Disable RA
  *
- * @param db                    database entry
+ * @param ifindex               interface index
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
  */
@@ -2610,13 +2629,14 @@ exit_err_unlock:
     return RAT_ERROR;
 }
 
+
 /**
  * @brief Kill RA
  *
  * Force-disables RA. This is how to disable a RA even if it is still in the
  * de-advertising phase.
  *
- * @param db                    database entry
+ * @param ifindex               interface index
  *
  * @return Returns RAT_ERROR on error, RAT_OK otherwise
  */
@@ -2687,7 +2707,7 @@ static uint16_t rat_rad_ra_minadvint_max (struct rat_db *db)
 /**
  * @brief Set maximum advertising interval of RA
  *
- * @param db                    database entry
+ * @param ifindex               interface index
  * @param data                  data provided by the parameter's parser function
  * @param len                   maximum length of provided data
  *
@@ -2750,7 +2770,7 @@ exit_err:
 /**
  * @brief Set minimum advertising interval of RA
  *
- * @param db                    database entry
+ * @param ifindex               interface index
  * @param data                  data provided by the parameter's parser function
  * @param len                   maximum length of provided data
  *
