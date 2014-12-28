@@ -12,7 +12,7 @@ CFLAGS       = -O2 -std=gnu99 -pedantic -Wall -Wextra -pthread
 CFLAGS      += $(shell echo $$CFLAGS)
 
 # debug is slow but helpful during development
-CDEFS      += -DRAT_DEBUG
+#CDEFS      += -DRAT_DEBUG
 # tracing is slow and spams the logs. use with care!
 #CDEFS      += -DRAT_DEBUG_TRACING
 
