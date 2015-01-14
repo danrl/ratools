@@ -11,11 +11,6 @@ CC           = gcc
 CFLAGS       = -O2 -std=gnu99 -pedantic -Wall -Wextra -pthread
 CFLAGS      += $(shell echo $$CFLAGS)
 
-# debug is slow but helpful during development
-#CDEFS      += -DRAT_DEBUG
-# tracing is slow and spams the logs. use with care!
-#CDEFS      += -DRAT_DEBUG_TRACING
-
 LDFLAGS      = $(shell echo $$LDFLAGS)
 
 BINDIR       = ../bin
@@ -25,7 +20,7 @@ BASHDIR      = ../bash-completion.d
 # --- build configuration ---------------------------------------------------- #
 
 
-.PHONY:      all clean
+.PHONY:      all clean debug trace
 .DEFAULT:    all
 
 
@@ -37,6 +32,20 @@ all:                 \
 
 clean:
 	rm -rf *.o "$(BASHDIR)" "$(BINDIR)"
+
+debug: CDEFS  += -DRAT_DEBUG
+debug: CFLAGS += -g
+debug:               \
+	rad              \
+	ractl            \
+	bash-completion
+
+trace: CDEFS  += -DRAT_DEBUG_TRACING
+trace: CFLAGS += -g
+trace:               \
+	rad              \
+	ractl            \
+	bash-completion
 
 
 %.o:	%.c %.h ratools.h
