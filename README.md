@@ -1,4 +1,4 @@
-ratools
+ratools [![Build Status](https://travis-ci.org/danrl/ratools.svg?branch=master)](https://travis-ci.org/danrl/ratools)
 =======
 
 This is ratools, a fast, dynamic, multi-threading framework for creating,
