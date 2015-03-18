@@ -82,7 +82,7 @@ Quick start
 First start the daemon (ratools/rad)
 
     # rad --loglevel info
-    ratools/rad v0.6.0 (December 2014)
+    ratools/rad v0.6.1 (March 2015)
     Written by Dan Luedtke <mail@danrl.de>
     Log: Level set to `info'.
     Info: Netlink: Thread started.
@@ -214,7 +214,7 @@ Resources
 License
 -------
 
-    Copyright 2013-2014 Dan Luedtke <mail@danrl.de>
+    Copyright 2013-2015 Dan Luedtke <mail@danrl.de>
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
