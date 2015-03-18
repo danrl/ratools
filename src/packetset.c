@@ -21,6 +21,7 @@
 #include "packetset.h"
 
 #include "log.h"
+#include "library.h"
 
 #include <stdlib.h>             /* calloc() */
 #include <pthread.h>
@@ -343,6 +344,7 @@ static void *__rat_ps_send (void *ptr)
     struct cmsghdr *cmsghdr;
     uint8_t cmsgbuf[CMSG_SPACE(sizeof(int)) + CMSG_SPACE(sizeof(*ipi))];
     struct rat_ps_pkt *pkt;
+    char buffer[RAT_6ADDR_STRSIZ];
     RAT_DEBUG_TRACE();
 
     /* prepare buffers */
@@ -397,20 +399,33 @@ static void *__rat_ps_send (void *ptr)
         usleep(ps->ps_delay);
     }
 
+    /* prepare address for logging */
+    rat_lib_6addr_to_str(buffer, sizeof(buffer), &ps->ps_daddr);
+
     /* case 1: no pacekts, just packet header */
     if (!ps->ps_pkt) {
         msghdr.msg_iovlen = 1;
         if (sendmsg(ps->ps_sd, &msghdr, 0) < 0)
-            rat_log_err("Delay: Interface %" PRIu32 ": Could not send packet",
-                        ps->ps_ifindex);
+            rat_log_err("Delay: Interface %" PRIu32 ": " \
+                        "Could not send packet to `%s'",
+                        ps->ps_ifindex, buffer);
+        else
+            rat_log_nfo("Delay: Interface %" PRIu32 ": " \
+                        "Sent packet to `%s'",
+                        ps->ps_ifindex, buffer);
     }
     /* case 2: packets containing payload */
     for (pkt = ps->ps_pkt; pkt; pkt = pkt->pkt_next) {
         iov[1].iov_base = pkt->pkt_data;
         iov[1].iov_len = pkt->pkt_len;
         if (sendmsg(ps->ps_sd, &msghdr, 0) < 0)
-            rat_log_err("Delay: Interface %" PRIu32 ": Could not send packet",
-                        ps->ps_ifindex);
+            rat_log_err("Delay: Interface %" PRIu32 ": " \
+                        "Could not send packet to `%s'",
+                        ps->ps_ifindex, buffer);
+        else
+            rat_log_nfo("Delay: Interface %" PRIu32 ": " \
+                        "Sent packet to `%s'",
+                        ps->ps_ifindex, buffer);
     }
 
     rat_ps_destroy(ps);
@@ -446,7 +461,7 @@ int rat_ps_send (struct rat_ps *ps)
         pthread_detach(pthread);
         pthread_attr_destroy(&attr);
     } else {
-        /* send non-delayed packet set directly */
+        /* immediatly send non-delayed packets */
         __rat_ps_send((void *) ps);
     }
 
