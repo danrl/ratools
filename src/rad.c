@@ -2726,11 +2726,29 @@ static int rat_rad_ra_set_maxadvint (uint32_t ifindex, uint8_t *data,
     advint = *((uint16_t *) data);
 
     /* upper boundary check */
-    if (advint > RAT_DB_MAXADVINT_MAX) {
+    /*
+     * This document updates Section 6.2.1. of [RFC4861] to update the
+     * following router configuration variables.  MaxRtrAdvInterval MUST be
+     * no greater than 21845.  AdvDefaultLifetime MUST be between
+     * MaxRtrAdvInterval and 65535.
+     * (DRAFT draft-krishnan-6man-maxra-01 sec. 3)
+     */
+    if (advint > RAT_DB_MAXADVINT_DRAFT) {
         rat_rad_mf.mf_error("Invalid Maximum Interval `%" PRIu16 "'!", advint);
         rat_rad_mf.mf_message("Must not be greater than %" PRIu16 ".",
-                              RAT_DB_MAXADVINT_MAX);
+                              RAT_DB_MAXADVINT_DRAFT);
         goto exit_err;
+    }
+    /*
+     * MUST be no less than 4 seconds and no greater than 1800 seconds.
+     * Default: 600 seconds
+     * (RFC 4861 sec. 6.2.1.)
+     */
+    if (advint > RAT_DB_MAXADVINT_MAX) {
+        rat_rad_mf.mf_message("Warning: Experimental Maximum Interval " \
+                              "`%" PRIu16 "'! "\
+                              "Should not be greater than %" PRIu16 ".",
+                              advint, RAT_DB_MAXADVINT_MAX);
     }
 
     RAT_DB_WRITELOCK();                                               /* LOCK */
