@@ -105,12 +105,19 @@ enum rat_db_state {
  * MUST be no less than 4 seconds and no greater than 1800 seconds.
  * Default: 600 seconds
  * (RFC 4861 sec. 6.2.1.)
+ *
+ * This document updates Section 6.2.1. of [RFC4861] to update the
+ * following router configuration variables.  MaxRtrAdvInterval MUST be
+ * no greater than 21845.  AdvDefaultLifetime MUST be between
+ * MaxRtrAdvInterval and 65535.
+ * (DRAFT draft-krishnan-6man-maxra-01 sec. 3)
  */
 #define RAT_DB_MAXADVINT_DEF    600
 /** Minimum allowed value of maximum advertising interval */
 #define RAT_DB_MAXADVINT_MIN    4
 /** Maximum allowed value of maximum advertising interval */
 #define RAT_DB_MAXADVINT_MAX    1800
+#define RAT_DB_MAXADVINT_DRAFT  21845
 
 
 /**

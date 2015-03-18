@@ -230,8 +230,10 @@ static int rat_ra_show (struct rat_mod_functions *mf,
                   RAT_LIB_S_H_TO_S(ra->ra_lifetime));
     else
         mf->mf_info("No Default Router");
-    if (ra->ra_lifetime > RAT_RA_LIFETIME_MAX)
+    if (ra->ra_lifetime > RAT_RA_LIFETIME_DRAFT)
         mf->mf_comment(mi->mi_in, "Illegal Router Lifetime!");
+    else if (ra->ra_lifetime > RAT_RA_LIFETIME_MAX)
+        mf->mf_comment(mi->mi_in, "Experimental Router Lifetime!");
 
     mf->mf_param(mi->mi_in, "Reachable Time");
     mf->mf_value("%" PRIu32, ra->ra_reachable);
@@ -544,11 +546,27 @@ static int rat_ra_set_lifetime (struct rat_mod_functions *mf,
 
     lifetime = *((uint16_t *) data);
 
-    if (lifetime > RAT_RA_LIFETIME_MAX) {
+    /*
+     * This document updates Section 6.2.1. of [RFC4861] to update the
+     * following router configuration variables.  MaxRtrAdvInterval MUST be
+     * no greater than 21845.  AdvDefaultLifetime MUST be between
+     * MaxRtrAdvInterval and 65535.
+     * (DRAFT draft-krishnan-6man-maxra-01 sec. 3)
+     */
+    if (lifetime > RAT_RA_LIFETIME_DRAFT) {
         mf->mf_error("Invalid lifetime `%" PRIu16 "'! " \
                      "Must not be greater than %" PRIu16 ".",
-                     lifetime, RAT_RA_LIFETIME_MAX);
+                     lifetime, RAT_RA_LIFETIME_DRAFT);
         goto exit_err;
+    }
+    /*
+     * MUST be either zero or between MaxRtrAdvInterval and 9000 seconds.
+     * (RFC 4861 sec. 6.2.1.)
+     */
+    if (lifetime > RAT_RA_LIFETIME_MAX) {
+        mf->mf_message("Warning: Experimental lifetime `%" PRIu16 "'! " \
+                       "Should not be greater than %" PRIu16 ".",
+                       lifetime, RAT_RA_LIFETIME_MAX);
     }
     /*
      * MUST be either zero or between MaxRtrAdvInterval and 9000 seconds.

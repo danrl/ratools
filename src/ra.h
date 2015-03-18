@@ -151,11 +151,18 @@ struct rat_ra_private {
  *
  * Default: 3 * MaxRtrAdvInterval
  * (RFC 4861 sec. 6.2.1.)
+ *
+ * This document updates Section 6.2.1. of [RFC4861] to update the
+ * following router configuration variables.  MaxRtrAdvInterval MUST be
+ * no greater than 21845.  AdvDefaultLifetime MUST be between
+ * MaxRtrAdvInterval and 65535.
+ * (DRAFT draft-krishnan-6man-maxra-01 sec. 3)
  */
 /** @{ */
+#define RAT_RA_LIFETIME_NODEF   0
 #define RAT_RA_LIFETIME_DEF     1800
 #define RAT_RA_LIFETIME_MAX     9000
-#define RAT_RA_LIFETIME_NODEF   0
+#define RAT_RA_LIFETIME_DRAFT   65335
 /** @} */
 
 
