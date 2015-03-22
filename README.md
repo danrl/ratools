@@ -208,7 +208,7 @@ Resources
 
 * Repository https://github.com/danrl/ratools
 
-* Documentation https://www.nonattached.net/ratools/index.html
+* Documentation https://www.sealand.io/ratools/
 
 
 License
