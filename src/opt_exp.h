@@ -56,7 +56,7 @@ struct rat_opt_exp_private {
     uint8_t                     exp_type;
     /** Length of payload */
     uint16_t                    exp_len;
-    /** Mobile ipv6 router address flag */
+    /** payload */
     uint8_t                     exp_payload[RAT_OPT_EXP_PAYLOAD_MAXLEN];
 };
 
@@ -64,7 +64,7 @@ struct rat_opt_exp_private {
 /**
  * @brief Experimental option transfer data structure
  *
- * Used to transfer data vom CLI to daemon in a well formed way.
+ * Used to transfer data vom CLI to daemon in a well-formatted way.
  */
 struct rat_opt_exp_transfer {
     /** Length of payload data */
