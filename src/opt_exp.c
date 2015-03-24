@@ -79,7 +79,7 @@ static int rat_opt_exp_create (struct rat_mod_functions *mf,
     /* allocate memory for module private data */
     exp = calloc(1, sizeof(*exp));
     if (!exp) {
-        rat_log_err("Module PI: Out of memory!");
+        rat_log_err("Module EXP: Out of memory!");
         goto exit_err;
     }
 
