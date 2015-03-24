@@ -31,6 +31,7 @@
 #include "opt_pi.h"
 #include "opt_rdnss.h"
 #include "opt_exp.h"
+#include "opt_cpuri.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -3289,6 +3290,7 @@ int main (int argc, char *argv[])
     rat_opt_pi_init();
     rat_opt_rdnss_init();
     rat_opt_exp_init();
+    rat_opt_cpuri_init();
 
     /* find RA core module id in registry */
     if (rat_mod_parse_module(RAT_RAMODNAME, &rat_rad_ra_mid) != RAT_OK) {

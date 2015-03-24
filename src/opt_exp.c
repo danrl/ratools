@@ -304,8 +304,6 @@ exit_err:
 }
 
 
-#include <stdio.h>
-
 /**
  * @brief Set payload
  *
