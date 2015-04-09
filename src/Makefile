@@ -65,6 +65,7 @@ ractl:               \
 	opt_pi.o         \
 	opt_rdnss.o      \
 	opt_exp.o        \
+	opt_cpuri.o      \
 	ractl.o
 	mkdir -p "$(BINDIR)"
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
@@ -82,6 +83,7 @@ rad:                 \
 	opt_pi.o         \
 	opt_rdnss.o      \
 	opt_exp.o        \
+	opt_cpuri.o      \
 	rad.o
 	mkdir -p "$(BINDIR)"
 	$(CC) $(CFLAGS) $(CDEFS) $(LDFLAGS) -o $(BINDIR)/$@ $^
