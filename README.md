@@ -1,5 +1,8 @@
-ratools [![Build Status](https://travis-ci.org/danrl/ratools.svg?branch=master)](https://travis-ci.org/danrl/ratools)
+ratools
 =======
+
+[![Build Status](https://travis-ci.org/danrl/ratools.svg?branch=master)](https://travis-ci.org/danrl/ratools)
+[![Coverity Scan](https://scan.coverity.com/projects/4719/badge.svg)](https://scan.coverity.com/projects/4719)
 
 This is ratools, a fast, dynamic, multi-threading framework for creating,
 modifying and sending IPv6 Router Advertisements (RA).
