@@ -1,5 +1,22 @@
+# travis ci
 language: c
 compiler:
   - gcc
   - clang
 script: cd ./src && make
+
+
+# coverity scan
+env:
+  global:
+   - secure: "FbX+dSAlfx5jvvph3B8K4tCsouWikMlDlqSqO+GObXMxI05rA98CIiZsqOp8YmVz+neizSoCYTKdOOaTk0eDAW87AT/1wS2gn1u1Sus6gcsUvvKBHRUhJAcySOT0B9+hcJkKdv6UY/xLiNadgSmoVvoeb1NpGg/+hvacgFhOpbU="
+
+addons:
+  coverity_scan:
+    project:
+      name: "danrl/ratools"
+      description: "Build submitted via Travis CI"
+    notification_email: mail@danrl.de
+    build_command_prepend: "make clean"
+    build_command: "make -j 4"
+    branch_pattern: coverity_scan
