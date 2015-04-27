@@ -206,6 +206,8 @@ Resources
 
 * Repository https://github.com/danrl/ratools
 
+* Bug Tracker https://github.com/danrl/ratools/issues
+
 * Documentation https://www.sealand.io/ratools/
 
 
