@@ -204,10 +204,6 @@ Please make sure to always use the latest version before reporting bugs. Thanks!
 Resources
 ---------
 
-* Mailing List http://www.freelists.org/list/ratools
-
-* Mailing List Archive http://www.freelists.org/archive/ratools/
-
 * Repository https://github.com/danrl/ratools
 
 * Documentation https://www.sealand.io/ratools/
