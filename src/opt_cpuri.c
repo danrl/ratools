@@ -240,6 +240,7 @@ static int rat_opt_cpuri_set_uri (struct rat_mod_functions *mf,
     struct rat_opt_cpuri_private *cp = RAT_MOD_PRIVATE(mi);
     const char *uri = (const char *) data;
     RAT_DEBUG_TRACE();
+    RAT_DISCARD_UNUSED(len);
 
     if (strlen(uri) > RAT_OPT_CPURI_URI_STRLEN) {
         mf->mf_error("URI too long!");
