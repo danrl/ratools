@@ -6,11 +6,11 @@ After=network.target
 
 [Service]
 ExecStart=/usr/bin/rad
+ExecStartPost=/bin/sh -c 'if [ -f /etc/ratools/rad.conf ]; then /usr/bin/ractl < /etc/ratools/rad.conf; fi'
 Restart=on-failure
 StandardOutput=syslog
 StandardError=syslog
 Sockets=ratools-rad.socket
-ExecStart=/bin/sh -c '[ -f /etc/ratools/rad.conf ] && /usr/bin/ractl < /etc/ratools/rad.conf'
 
 [Install]
 Also=ratools-rad.socket
