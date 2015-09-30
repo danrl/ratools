@@ -7,6 +7,7 @@ After=network.target
 [Service]
 ExecStart=/usr/bin/rad
 ExecStartPost=/bin/sh -c 'if [ -f /etc/ratools/rad.conf ]; then /usr/bin/ractl < /etc/ratools/rad.conf; fi'
+KillSignal=SIGINT
 Restart=on-failure
 StandardOutput=syslog
 StandardError=syslog
