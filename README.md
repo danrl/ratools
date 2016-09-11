@@ -1,5 +1,5 @@
-ratools
-=======
+# ratools
+
 
 [![Build Status](https://travis-ci.org/danrl/ratools.svg?branch=master)](https://travis-ci.org/danrl/ratools)
 
@@ -7,15 +7,13 @@ This is ratools, a fast, dynamic, multi-threading framework for creating,
 modifying and sending IPv6 Router Advertisements (RA).
 
 
-Quick Introduction
-------------------
+## Quick Introduction
 
-See this 4 minute video to get a brief overview.
-https://www.youtube.com/watch?v=KXeOQLmGWuI
+See [this 4 minute video](
+https://www.youtube.com/watch?v=KXeOQLmGWuI) to get a brief overview.
 
 
-Architecture
-------------
+## Architecture
 
 The basic idea is to have two programs. On the one hand a
 powerful CLI, called ratools/ractl, for manipulating the
@@ -63,8 +61,7 @@ The internal structure of ratools/rad looks like this:
 
 
 
-Building
---------
+## Building
 
 Although ratools is complex from the inside, the code looks very POSIX-ish from
 the outside. Thus, bulding is relatively easy. Clone the repository and type
@@ -78,8 +75,7 @@ the outside. Thus, bulding is relatively easy. Clone the repository and type
     [...]
 
 
-Quick start
------------
+## Quick start
 
 First start the daemon (ratools/rad)
 
@@ -201,20 +197,17 @@ Please make sure to always use the latest version before reporting bugs. Thanks!
     # ractl version
 
 
-Resources
----------
+## Resources
 
 * Repository https://github.com/danrl/ratools
-
 * Bug Tracker https://github.com/danrl/ratools/issues
-
 * Documentation https://www.sealand.io/ratools/
 
 
-License
--------
+## License
 
-    Copyright 2013-2015 Dan Luedtke <mail@danrl.de>
+
+    Copyright 2013-2016 Dan Luedtke <mail@danrl.de>
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
