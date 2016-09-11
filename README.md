@@ -9,8 +9,7 @@ modifying and sending IPv6 Router Advertisements (RA).
 
 ## Quick Introduction
 
-See [this 4 minute video](
-https://www.youtube.com/watch?v=KXeOQLmGWuI) to get a brief overview.
+See [this 4 minute video](https://www.youtube.com/watch?v=IT-EbIMABqQ) to get a brief overview.
 
 
 ## Architecture
