@@ -208,7 +208,7 @@ Resources
 
 * Bug Tracker https://github.com/danrl/ratools/issues
 
-* Documentation https://www.sealand.io/ratools/
+* Documentation https://www.cakelie.net/ratools/
 
 
 License
