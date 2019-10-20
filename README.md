@@ -1,8 +1,6 @@
 ratools
 =======
 
-[![Build Status](https://travis-ci.org/danrl/ratools.svg?branch=master)](https://travis-ci.org/danrl/ratools)
-
 This is ratools, a fast, dynamic, multi-threading framework for creating,
 modifying and sending IPv6 Router Advertisements (RA).
 
@@ -199,16 +197,6 @@ ratools/ractl:
 Please make sure to always use the latest version before reporting bugs. Thanks!
 
     # ractl version
-
-
-Resources
----------
-
-* Repository https://github.com/danrl/ratools
-
-* Bug Tracker https://github.com/danrl/ratools/issues
-
-* Documentation https://www.cakelie.net/ratools/
 
 
 License
